@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Odoo 18 Point of Sale - Exact Clone Prototype</title>
+  
+  <!-- Fonts & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Libre+Barcode+39+Text&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Odoo POS Styling -->
+  <link rel="stylesheet" href="css/odoo-pos.css">
+</head>
+<body>
+
+  <!-- ======================================================================
+       ODOO POS TOP NAVIGATION BAR
+       ====================================================================== -->
+  <header class="odoo-topbar">
+    <div class="topbar-left">
+      <div class="topbar-brand">
+        <div class="brand-icon"><i class="fas fa-cash-register"></i></div>
+        <span>odoo POS</span>
+      </div>
+      <div class="topbar-divider"></div>
+      <div class="topbar-breadcrumbs">
+        <span class="breadcrumb-store">Odoo Retail Flagship</span>
+        <span>/ Point of Sale</span>
+      </div>
+    </div>
+
+    <!-- Active Orders Tabs Container -->
+    <div class="topbar-center" id="topbar-order-tabs">
+      <!-- Dynamically populated by uiRenderer -->
+    </div>
+
+    <div class="topbar-right">
+      <div class="topbar-badge sync-online" title="All orders synchronized with Odoo backend">
+        <span class="sync-dot"></span>
+        <span>Online</span>
+      </div>
+
+      <button class="topbar-icon-btn" id="btn-theme-toggle" title="Toggle Odoo Dark Mode / Light Mode">
+        <i class="fas fa-moon"></i>
+      </button>
+
+      <button class="btn-close-session" id="btn-close-session" title="Close Session / Cash Control">
+        <i class="fas fa-lock"></i>
+        <span>Close Session</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ======================================================================
+       POS SCREENS WRAPPER
+       ====================================================================== -->
+  <main class="pos-screen-wrapper">
+
+    <!-- 1. MAIN ORDER SCREEN (DUAL PANE SPLIT VIEW) -->
+    <section id="screen-order" class="pos-screen active">
+      
+      <!-- LEFT PANE: ORDER TICKET / CART -->
+      <aside class="pos-left-pane">
+        <!-- Customer Select Button Bar -->
+        <div class="order-customer-bar">
+          <button class="btn-select-customer" id="btn-select-customer">
+            <span style="display:flex; align-items:center; gap:8px;">
+              <i class="far fa-user"></i>
+              <span>Customer</span>
+            </span>
+            <span style="color:var(--text-light); font-size:12px;">+ Set Customer</span>
+          </button>
+        </div>
+
+        <!-- Scrollable Order Lines Container -->
+        <div class="order-lines-container" id="order-lines-container">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Order Summary Box -->
+        <div class="order-summary-box">
+          <div class="summary-row">
+            <span>Subtotal (excl. tax):</span>
+            <span id="summary-subtotal" style="font-family:var(--font-mono);">$0.00</span>
+          </div>
+          <div class="summary-row">
+            <span>Taxes (VAT 10%):</span>
+            <span id="summary-taxes" style="font-family:var(--font-mono);">$0.00</span>
+          </div>
+          <div class="summary-row total">
+            <span>Total Amount:</span>
+            <span id="summary-total">$0.00</span>
+          </div>
+        </div>
+
+        <!-- Iconic Odoo POS Numpad & Action Bar -->
+        <div class="pos-numpad-wrapper">
+          <!-- Action Buttons Row -->
+          <div class="pos-action-row">
+            <button class="action-btn" id="btn-action-customer" title="Assign Customer">
+              <i class="fas fa-user-tag"></i> Customer
+            </button>
+            <button class="action-btn" id="btn-action-refund" title="Refund Line Item (-Qty)">
+              <i class="fas fa-undo"></i> Refund
+            </button>
+            <button class="action-btn" id="btn-action-info" title="Product Info & Details">
+              <i class="fas fa-info-circle"></i> Info
+            </button>
+            <button class="action-btn" id="btn-action-note" title="Add Kitchen/Internal Note">
+              <i class="fas fa-sticky-note"></i> Note
+            </button>
+          </div>
+
+          <!-- Numpad Grid -->
+          <div class="numpad-grid">
+            <!-- Row 1: Digits 1, 2, 3 and Qty Mode -->
+            <button class="numpad-btn numpad-digit-btn" data-val="1">1</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="2">2</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="3">3</button>
+            <button class="numpad-btn numpad-mode-btn active" data-mode="qty">Qty</button>
+
+            <!-- Row 2: Digits 4, 5, 6 and % Disc Mode -->
+            <button class="numpad-btn numpad-digit-btn" data-val="4">4</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="5">5</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="6">6</button>
+            <button class="numpad-btn numpad-mode-btn" data-mode="disc">% Disc</button>
+
+            <!-- Row 3: Digits 7, 8, 9 and Price Mode -->
+            <button class="numpad-btn numpad-digit-btn" data-val="7">7</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="8">8</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="9">9</button>
+            <button class="numpad-btn numpad-mode-btn" data-mode="price">Price</button>
+
+            <!-- Row 4: +/- , 0 , . , Backspace -->
+            <button class="numpad-btn numpad-digit-btn" data-val="+/-">+/-</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="0">0</button>
+            <button class="numpad-btn numpad-digit-btn" data-val=".">.</button>
+            <button class="numpad-btn numpad-digit-btn" data-val="backspace"><i class="fas fa-backspace"></i></button>
+
+            <!-- Big Green Payment -> Button -->
+            <button class="btn-pay-huge" id="btn-pay-huge">
+              <span>Payment</span>
+              <i class="fas fa-arrow-right"></i>
+              <span class="pay-total-badge" id="pay-btn-total-badge">$0.00</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- RIGHT PANE: PRODUCT CATALOG -->
+      <section class="pos-right-pane">
+        <!-- Search & Barcode Bar -->
+        <div class="catalog-topbar">
+          <div class="catalog-search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="catalog-search-input" class="catalog-search-input" placeholder="Search products by name, SKU or barcode... [Alt+S]" autocomplete="off" />
+          </div>
+          
+          <button class="catalog-demo-barcode-btn" id="btn-demo-barcode" title="Simulate scanning a product barcode with audio beep">
+            <i class="fas fa-barcode"></i>
+            <span>Simulate Barcode Scan</span>
+          </button>
+        </div>
+
+        <!-- Category Filter Chips Bar -->
+        <div class="category-chips-bar" id="category-chips-bar">
+          <!-- Dynamically populated -->
+        </div>
+
+        <!-- Product Grid Container -->
+        <div class="product-grid-container">
+          <div class="product-grid" id="product-grid">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- 2. PAYMENT SCREEN -->
+    <section id="screen-payment" class="pos-screen">
+      <div class="payment-header">
+        <div class="payment-header-left">
+          <button class="btn-back" id="btn-back-to-order">
+            <i class="fas fa-arrow-left"></i>
+            <span>Back to Order</span>
+          </button>
+          <div class="payment-title">Payment Register</div>
+        </div>
+        <div style="font-size:13.5px; color:var(--text-muted);">
+          Session: <strong style="color:var(--text-main);">POS/2026/0042</strong>
+        </div>
+      </div>
+
+      <div class="payment-body">
+        <!-- Left Column: Payment Methods & Options -->
+        <div class="payment-left-col">
+          <div class="payment-section-card">
+            <div class="section-label">Payment Method</div>
+            <div class="payment-methods-grid">
+              <button class="payment-method-btn active" data-method="Cash">
+                <i class="fas fa-money-bill-wave"></i>
+                <span>Cash</span>
+              </button>
+              <button class="payment-method-btn" data-method="Bank / Card">
+                <i class="fas fa-credit-card"></i>
+                <span>Bank / Card Terminal</span>
+              </button>
+              <button class="payment-method-btn" data-method="Customer Account">
+                <i class="fas fa-file-invoice-dollar"></i>
+                <span>Customer Account</span>
+              </button>
+              <button class="payment-method-btn" data-method="Gift Card">
+                <i class="fas fa-gift"></i>
+                <span>Gift Card Voucher</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="payment-section-card">
+            <div class="section-label">Invoice & Options</div>
+            <div class="payment-options-row">
+              <button class="toggle-pill-btn active" id="btn-toggle-invoice">
+                <i class="fas fa-receipt"></i> Invoice
+              </button>
+              <button class="toggle-pill-btn" id="btn-add-tip">
+                <i class="fas fa-coins"></i> + Tip
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Column: Live Tender Numpad & Calculation -->
+        <div class="payment-right-col">
+          <div class="payment-calc-banner">
+            <div class="calc-metric">
+              <span class="calc-label">Total Due</span>
+              <span class="calc-value" id="pay-screen-total">$0.00</span>
+            </div>
+            <div class="calc-metric">
+              <span class="calc-label">Tendered</span>
+              <span class="calc-value" id="pay-screen-tendered">$0.00</span>
+            </div>
+            <div class="calc-metric">
+              <span class="calc-label">Change Return</span>
+              <span class="calc-value highlight-change" id="pay-screen-change">$0.00</span>
+            </div>
+          </div>
+
+          <!-- Quick Cash Buttons -->
+          <div class="quick-cash-row">
+            <button class="btn-quick-cash" data-amount="10">+ $10</button>
+            <button class="btn-quick-cash" data-amount="20">+ $20</button>
+            <button class="btn-quick-cash" data-amount="50">+ $50</button>
+            <button class="btn-quick-cash" data-amount="100">+ $100</button>
+            <button class="btn-quick-cash" data-amount="exact">Exact</button>
+          </div>
+
+          <!-- Payment Numpad -->
+          <div class="numpad-grid" style="flex:1;">
+            <button class="numpad-btn pay-numpad-btn" data-val="1">1</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="2">2</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="3">3</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="backspace"><i class="fas fa-backspace"></i></button>
+
+            <button class="numpad-btn pay-numpad-btn" data-val="4">4</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="5">5</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="6">6</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="0">0</button>
+
+            <button class="numpad-btn pay-numpad-btn" data-val="7">7</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="8">8</button>
+            <button class="numpad-btn pay-numpad-btn" data-val="9">9</button>
+            <button class="numpad-btn pay-numpad-btn" data-val=".">.</button>
+
+            <button class="btn-validate-order" id="btn-validate-order" style="grid-column: span 4;">
+              <i class="fas fa-check-circle"></i>
+              <span>Validate Order</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. THERMAL RECEIPT SCREEN -->
+    <section id="screen-receipt" class="pos-screen">
+      <!-- Thermal Paper Content Preview -->
+      <div class="receipt-preview-wrapper">
+        <div class="thermal-receipt" id="thermal-receipt-content">
+          <!-- Dynamically generated thermal receipt content -->
+        </div>
+      </div>
+
+      <!-- Actions Sidebar -->
+      <div class="receipt-actions-sidebar">
+        <button class="btn-next-order" id="btn-next-order">
+          <span>Next Order</span>
+          <i class="fas fa-arrow-right"></i>
+        </button>
+
+        <button class="btn-receipt-action" id="btn-print-receipt">
+          <i class="fas fa-print"></i>
+          <span>Print Receipt</span>
+        </button>
+
+        <button class="btn-receipt-action" onclick="alert('Digital receipt sent by email successfully!');">
+          <i class="fas fa-envelope"></i>
+          <span>Send by Email</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ======================================================================
+       ODOO POS MODALS & OVERLAYS
+       ====================================================================== -->
+
+  <!-- 1. CUSTOMER SELECTION MODAL -->
+  <div class="odoo-modal-overlay" id="customer-modal-overlay">
+    <div class="odoo-modal">
+      <div class="modal-header">
+        <div class="modal-title">Select Customer</div>
+        <button class="btn-modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="catalog-search-box" style="max-width:100%;">
+          <i class="fas fa-search"></i>
+          <input type="text" id="customer-search-input" class="catalog-search-input" placeholder="Search customer by name, email, phone or VAT..." />
+        </div>
+
+        <div class="customer-list-grid" id="customer-modal-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. PRODUCT DETAILS MODAL -->
+  <div class="odoo-modal-overlay" id="product-info-modal-overlay">
+    <div class="odoo-modal" style="max-width:540px;">
+      <div class="modal-header">
+        <div class="modal-title">Product Information</div>
+        <button class="btn-modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body" id="product-info-modal-content">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. CASH CONTROL / CLOSE SESSION MODAL -->
+  <div class="odoo-modal-overlay" id="cash-control-modal-overlay">
+    <div class="odoo-modal" style="max-width:560px;">
+      <div class="modal-header">
+        <div class="modal-title">Cash Register Control & Session Reconciliation</div>
+        <button class="btn-modal-close"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="cash-control-grid">
+          <div class="cash-control-box">
+            <div style="font-size:12px; color:var(--text-muted);">Opening Cash Drawer</div>
+            <div style="font-size:18px; font-weight:700; margin-top:4px;" id="cash-open-balance">$1,000.00</div>
+          </div>
+          <div class="cash-control-box">
+            <div style="font-size:12px; color:var(--text-muted);">Cash Sales This Session</div>
+            <div style="font-size:18px; font-weight:700; margin-top:4px; color:var(--odoo-teal);" id="cash-sales-total">$0.00</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:18px;">
+          <label style="font-weight:600; font-size:13.5px; display:block; margin-bottom:6px;">Expected in Register:</label>
+          <div style="font-size:22px; font-family:var(--font-mono); font-weight:700;" id="cash-expected-total">$1,000.00</div>
+        </div>
+
+        <div style="margin-bottom:20px;">
+          <label style="font-weight:600; font-size:13.5px; display:block; margin-bottom:6px;">Actual Counted Cash:</label>
+          <input type="number" id="cash-actual-input" step="0.01" style="width:100%; height:44px; padding:0 14px; border-radius:8px; border:1px solid var(--border-color); font-size:16px; font-family:var(--font-mono);" />
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:12px;">
+          <button class="action-btn btn-modal-close" style="padding:0 18px;">Cancel</button>
+          <button class="btn-close-session" onclick="alert('Session closed and cash difference recorded successfully!'); location.reload();">
+            Validate & Close Session
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+       MAIN APPLICATION ENTRY POINT
+       ====================================================================== -->
+  <script type="module">
+    import { PosController } from './js/posController.js';
+
+    document.addEventListener('DOMContentLoaded', () => {
+      window.posApp = new PosController();
+      window.posApp.init();
+    });
+  </script>
+</body>
+</html>

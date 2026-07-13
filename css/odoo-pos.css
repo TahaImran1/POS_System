@@ -1,0 +1,1476 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700&display=swap');
+
+/* ==========================================================================
+   1. ODOO POS DESIGN TOKENS & THEMES
+   ========================================================================== */
+:root {
+  /* Iconic Odoo Brand Palette */
+  --odoo-purple: #714B67;
+  --odoo-purple-dark: #583850;
+  --odoo-purple-light: #8f6283;
+  --odoo-teal: #017E84;
+  --odoo-teal-hover: #01656a;
+  --odoo-teal-light: #e6f2f3;
+  --odoo-green: #00A09D;
+  --odoo-accent: #f06050;
+  --odoo-warning: #f8ab05;
+  --odoo-success: #28a745;
+  
+  /* Neutral / Surface Tokens (Light Theme) */
+  --bg-app: #f0f2f5;
+  --bg-surface: #ffffff;
+  --bg-surface-subtle: #f8f9fa;
+  --bg-hover: #f1f5f9;
+  --bg-active: #e2e8f0;
+  
+  --border-color: #e2e8f0;
+  --border-strong: #cbd5e1;
+  
+  --text-main: #1e293b;
+  --text-muted: #64748b;
+  --text-light: #94a3b8;
+  --text-on-purple: #ffffff;
+  --text-on-teal: #ffffff;
+
+  /* Numpad specific */
+  --numpad-bg: #f8fafc;
+  --numpad-btn-bg: #ffffff;
+  --numpad-btn-border: #e2e8f0;
+  --numpad-btn-hover: #f1f5f9;
+  --numpad-mode-active: #017E84;
+  --numpad-mode-text: #ffffff;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --shadow-modal: 0 25px 50px -12px rgba(15, 23, 42, 0.25);
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* Typography & Transitions */
+  --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: 'Outfit', var(--font-main);
+  --font-mono: 'JetBrains Mono', monospace;
+  
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme="dark"] {
+  --bg-app: #13151f;
+  --bg-surface: #1e202e;
+  --bg-surface-subtle: #252838;
+  --bg-hover: #2e3246;
+  --bg-active: #383d54;
+  
+  --border-color: #2e3246;
+  --border-strong: #404660;
+  
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  --text-light: #64748b;
+
+  --odoo-teal-light: rgba(1, 126, 132, 0.22);
+
+  --numpad-bg: #181a26;
+  --numpad-btn-bg: #222534;
+  --numpad-btn-border: #2e3246;
+  --numpad-btn-hover: #2d3144;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================================================
+   2. GLOBAL RESET & BASE STYLES
+   ========================================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--font-main);
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+input, select, textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* Scrollbar Customization */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* ==========================================================================
+   3. ODOO TOP NAVIGATION BAR
+   ========================================================================== */
+.odoo-topbar {
+  height: 48px;
+  background: linear-gradient(135deg, var(--odoo-purple) 0%, var(--odoo-purple-dark) 100%);
+  color: var(--text-on-purple);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  box-shadow: var(--shadow-md);
+  z-index: 100;
+  position: relative;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.3px;
+  color: #ffffff;
+}
+
+.brand-icon {
+  width: 28px;
+  height: 28px;
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  backdrop-filter: blur(4px);
+}
+
+.topbar-divider {
+  width: 1px;
+  height: 22px;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.topbar-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.breadcrumb-store {
+  background: rgba(255, 255, 255, 0.12);
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* Topbar Center: Active Orders Tabs */
+.topbar-center {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.order-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  background: transparent;
+  transition: all var(--transition-fast);
+}
+
+.order-tab:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.order-tab.active {
+  background: var(--bg-surface);
+  color: var(--text-main);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.order-tab-badge {
+  background: var(--odoo-teal);
+  color: #fff;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.new-order-tab-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.new-order-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+/* Topbar Right actions */
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.topbar-badge.sync-online {
+  background: rgba(40, 167, 69, 0.25);
+  border: 1px solid rgba(40, 167, 69, 0.5);
+}
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #28a745;
+  box-shadow: 0 0 8px #28a745;
+}
+
+.topbar-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 15px;
+}
+
+.topbar-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.btn-close-session {
+  background-color: var(--odoo-accent);
+  color: #ffffff;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-close-session:hover {
+  background-color: #d9534f;
+  box-shadow: 0 0 10px rgba(240, 96, 80, 0.4);
+}
+
+/* ==========================================================================
+   4. SCREENS CONTAINER
+   ========================================================================== */
+.pos-screen-wrapper {
+  height: calc(100vh - 48px);
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.pos-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+.pos-screen.active {
+  display: flex;
+  opacity: 1;
+  z-index: 10;
+}
+
+/* ==========================================================================
+   5. MAIN POS ORDER SCREEN (DUAL PANE SPLIT VIEW)
+   ========================================================================== */
+#screen-order {
+  display: none; /* controlled by active class */
+  flex-direction: row;
+  height: 100%;
+}
+
+#screen-order.active {
+  display: flex;
+}
+
+/* --- LEFT PANE: ORDER TICKET / CART --- */
+.pos-left-pane {
+  width: 420px;
+  min-width: 380px;
+  max-width: 460px;
+  height: 100%;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  z-index: 5;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Customer Select Bar */
+.order-customer-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-surface-subtle);
+}
+
+.btn-select-customer {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  border: 1px dashed var(--border-strong);
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 13.5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all var(--transition-fast);
+}
+
+.btn-select-customer:hover {
+  border-color: var(--odoo-teal);
+  background-color: var(--odoo-teal-light);
+  color: var(--odoo-teal);
+}
+
+.customer-info-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background-color: var(--odoo-purple);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.customer-loyalty-pill {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background-color: var(--odoo-teal-light);
+  color: var(--odoo-teal);
+  font-weight: 600;
+}
+
+/* Order Line Items List */
+.order-lines-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 10px;
+}
+
+.empty-cart-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  text-align: center;
+  padding: 30px;
+}
+
+.empty-cart-state i {
+  font-size: 42px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+.empty-cart-state p {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.order-line {
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  background-color: var(--bg-surface);
+}
+
+.order-line:hover {
+  background-color: var(--bg-hover);
+}
+
+.order-line.selected {
+  background-color: var(--odoo-teal-light);
+  border-color: var(--odoo-teal);
+  box-shadow: 0 1px 3px rgba(1, 126, 132, 0.15);
+}
+
+.order-line-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.order-line-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.order-line-subtotal {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-main);
+}
+
+.order-line-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.line-qty-unit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.line-discount-pill {
+  font-size: 11px;
+  background-color: var(--odoo-warning);
+  color: #fff;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.line-note {
+  font-size: 12px;
+  color: var(--odoo-teal);
+  font-style: italic;
+  margin-top: 3px;
+}
+
+/* Order Summary Footer */
+.order-summary-box {
+  padding: 12px 16px;
+  background-color: var(--bg-surface-subtle);
+  border-top: 1px solid var(--border-color);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.summary-row.total {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.summary-row.total span:last-child {
+  font-family: var(--font-mono);
+  color: var(--odoo-teal);
+}
+
+/* Iconic Odoo Numpad & Action Bar */
+.pos-numpad-wrapper {
+  background-color: var(--numpad-bg);
+  border-top: 1px solid var(--border-color);
+  padding: 10px;
+}
+
+.numpad-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.numpad-btn {
+  height: 48px;
+  border-radius: 6px;
+  background-color: var(--numpad-btn-bg);
+  border: 1px solid var(--numpad-btn-border);
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.numpad-btn:hover {
+  background-color: var(--numpad-btn-hover);
+  transform: translateY(-1px);
+}
+
+.numpad-btn:active {
+  transform: translateY(1px);
+}
+
+/* Numpad Mode Buttons (Qty, Disc, Price) */
+.numpad-mode-btn {
+  background-color: var(--bg-surface-subtle);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+}
+
+.numpad-mode-btn.active {
+  background-color: var(--numpad-mode-active);
+  color: var(--numpad-mode-text);
+  border-color: var(--numpad-mode-active);
+  box-shadow: 0 2px 6px rgba(1, 126, 132, 0.3);
+}
+
+/* Action Buttons row above Pay */
+.pos-action-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.action-btn {
+  height: 38px;
+  border-radius: 6px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.action-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+/* Big Vibrant Payment Button */
+.btn-pay-huge {
+  grid-column: span 4;
+  height: 52px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--odoo-teal) 0%, var(--odoo-green) 100%);
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  box-shadow: 0 4px 12px rgba(1, 126, 132, 0.3);
+  margin-top: 4px;
+}
+
+.btn-pay-huge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(1, 126, 132, 0.4);
+}
+
+.btn-pay-huge .pay-total-badge {
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+/* --- RIGHT PANE: PRODUCT CATALOG --- */
+.pos-right-pane {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-app);
+  overflow: hidden;
+}
+
+/* Catalog Search & Barcode Bar */
+.catalog-topbar {
+  padding: 12px 18px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.catalog-search-box {
+  flex: 1;
+  position: relative;
+  max-width: 480px;
+}
+
+.catalog-search-box i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  font-size: 15px;
+}
+
+.catalog-search-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px 0 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface-subtle);
+  font-size: 14px;
+  transition: all var(--transition-fast);
+}
+
+.catalog-search-input:focus {
+  outline: none;
+  border-color: var(--odoo-teal);
+  background-color: var(--bg-surface);
+  box-shadow: 0 0 0 3px var(--odoo-teal-light);
+}
+
+.catalog-demo-barcode-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  transition: all var(--transition-fast);
+}
+
+.catalog-demo-barcode-btn:hover {
+  background-color: var(--odoo-teal-light);
+  border-color: var(--odoo-teal);
+  color: var(--odoo-teal);
+}
+
+/* Category Filter Chips Bar */
+.category-chips-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.category-chip {
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.category-chip:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.category-chip.active {
+  background-color: var(--odoo-teal);
+  color: #ffffff;
+  border-color: var(--odoo-teal);
+  box-shadow: 0 2px 6px rgba(1, 126, 132, 0.25);
+}
+
+/* Product Grid Container */
+.product-grid-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 14px;
+}
+
+/* Authentic Odoo Product Card */
+.product-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow: var(--shadow-sm);
+}
+
+.product-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--odoo-teal);
+}
+
+.product-card:active {
+  transform: scale(0.98);
+}
+
+.product-image-box {
+  height: 115px;
+  width: 100%;
+  background-color: var(--bg-surface-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.product-image-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 8px;
+}
+
+.product-sku-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.product-price-pill {
+  position: absolute;
+  bottom: 6px;
+  left: 6px;
+  background-color: var(--odoo-teal);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 12.5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.product-info-box {
+  padding: 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.product-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.3;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.product-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Micro-animation feedback ripple on click */
+@keyframes clickPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+
+.product-card.animate-click {
+  animation: clickPop 200ms ease;
+}
+
+/* ==========================================================================
+   6. PAYMENT SCREEN (#screen-payment)
+   ========================================================================== */
+#screen-payment {
+  display: none;
+  background-color: var(--bg-app);
+  height: 100%;
+  flex-direction: column;
+}
+
+#screen-payment.active {
+  display: flex;
+}
+
+.payment-header {
+  height: 56px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+}
+
+.payment-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.btn-back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--text-main);
+}
+
+.btn-back:hover {
+  background-color: var(--bg-hover);
+}
+
+.payment-title {
+  font-family: var(--font-heading);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.payment-body {
+  flex: 1;
+  display: flex;
+  padding: 24px;
+  gap: 24px;
+  overflow: hidden;
+}
+
+.payment-left-col {
+  width: 42%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment-section-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: var(--shadow-sm);
+}
+
+.section-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.payment-methods-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.payment-method-btn {
+  padding: 16px 12px;
+  border-radius: 10px;
+  border: 2px solid var(--border-color);
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  font-weight: 600;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.payment-method-btn i {
+  font-size: 22px;
+  color: var(--odoo-teal);
+}
+
+.payment-method-btn:hover {
+  border-color: var(--odoo-teal);
+  background-color: var(--odoo-teal-light);
+}
+
+.payment-method-btn.active {
+  border-color: var(--odoo-teal);
+  background-color: var(--odoo-teal-light);
+  color: var(--odoo-teal);
+  box-shadow: 0 4px 10px rgba(1, 126, 132, 0.15);
+}
+
+/* Quick Options (Invoice, Tip, Customer Account) */
+.payment-options-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toggle-pill-btn {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  font-weight: 600;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.toggle-pill-btn.active {
+  background-color: var(--odoo-purple);
+  color: #fff;
+  border-color: var(--odoo-purple);
+}
+
+/* Payment Center/Right Column (Tender Numpad & Calculations) */
+.payment-right-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment-calc-banner {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.calc-metric {
+  display: flex;
+  flex-direction: column;
+}
+
+.calc-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.calc-value {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-top: 4px;
+}
+
+.calc-value.highlight-change {
+  color: #28a745;
+}
+
+.quick-cash-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-quick-cash {
+  flex: 1;
+  height: 44px;
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--odoo-teal);
+  transition: all var(--transition-fast);
+}
+
+.btn-quick-cash:hover {
+  background-color: var(--odoo-teal-light);
+  border-color: var(--odoo-teal);
+}
+
+/* Validate Order Huge Button */
+.btn-validate-order {
+  height: 64px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #28a745 0%, #208e38 100%);
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  box-shadow: 0 8px 20px rgba(40, 167, 69, 0.35);
+}
+
+.btn-validate-order:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(40, 167, 69, 0.45);
+}
+
+.btn-validate-order:disabled {
+  background: #94a3b8;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ==========================================================================
+   7. THERMAL RECEIPT SCREEN (#screen-receipt)
+   ========================================================================== */
+#screen-receipt {
+  display: none;
+  background-color: var(--bg-app);
+  height: 100%;
+  padding: 24px;
+  flex-direction: row;
+  justify-content: center;
+  gap: 32px;
+  overflow-y: auto;
+}
+
+#screen-receipt.active {
+  display: flex;
+}
+
+.receipt-preview-wrapper {
+  width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Realistic Thermal Receipt Paper */
+.thermal-receipt {
+  width: 100%;
+  background-color: #ffffff;
+  color: #111827;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 28px 22px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  position: relative;
+  line-height: 1.5;
+  border-radius: 2px;
+}
+
+.thermal-receipt::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(-45deg, #ffffff 6px, transparent 0), linear-gradient(45deg, #ffffff 6px, transparent 0);
+  background-position: left-top;
+  background-repeat: repeat-x;
+  background-size: 12px 12px;
+}
+
+.thermal-receipt::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(-45deg, transparent 6px, #ffffff 0), linear-gradient(45deg, transparent 6px, #ffffff 0);
+  background-position: left-bottom;
+  background-repeat: repeat-x;
+  background-size: 12px 12px;
+}
+
+.receipt-header-text {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.receipt-store-title {
+  font-weight: 700;
+  font-size: 17px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.receipt-divider {
+  border-top: 1px dashed #9ca3af;
+  margin: 12px 0;
+}
+
+.receipt-item-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.receipt-totals-area {
+  margin-top: 12px;
+}
+
+.receipt-barcode-box {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px dashed #9ca3af;
+}
+
+.receipt-barcode-visual {
+  font-family: 'Libre Barcode 39 Text', var(--font-mono);
+  font-size: 26px;
+  letter-spacing: 4px;
+  margin: 6px 0;
+}
+
+/* Receipt Sidebar Actions */
+.receipt-actions-sidebar {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.btn-receipt-action {
+  height: 46px;
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-receipt-action:hover {
+  background-color: var(--bg-hover);
+}
+
+.btn-next-order {
+  height: 58px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--odoo-teal) 0%, var(--odoo-green) 100%);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 6px 16px rgba(1, 126, 132, 0.35);
+}
+
+.btn-next-order:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(1, 126, 132, 0.45);
+}
+
+/* ==========================================================================
+   8. ODOO MODALS & OVERLAYS
+   ========================================================================== */
+.odoo-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.odoo-modal-overlay.active {
+  display: flex;
+  opacity: 1;
+}
+
+.odoo-modal {
+  background-color: var(--bg-surface);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 680px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-modal);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  animation: modalPop 250ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalPop {
+  0% { transform: scale(0.94); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-surface-subtle);
+}
+
+.modal-title {
+  font-family: var(--font-heading);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.btn-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 16px;
+}
+
+.btn-modal-close:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-main);
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Customer Modal Specifics */
+.customer-list-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.customer-card-item {
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.customer-card-item:hover {
+  background-color: var(--odoo-teal-light);
+  border-color: var(--odoo-teal);
+}
+
+/* Cash Control Modal Specifics */
+.cash-control-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.cash-control-box {
+  padding: 14px;
+  border-radius: 8px;
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-color);
+}
+
+/* Toast / Notification Banner */
+.odoo-toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.odoo-toast {
+  padding: 12px 18px;
+  border-radius: 8px;
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  box-shadow: var(--shadow-lg);
+  border-left: 4px solid var(--odoo-teal);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 500;
+  font-size: 13.5px;
+  animation: toastSlide 250ms ease;
+}
+
+@keyframes toastSlide {
+  from { transform: translateX(50px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Print Specific Styling */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .thermal-receipt, .thermal-receipt * {
+    visibility: visible;
+  }
+  .thermal-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none;
+  }
+}
