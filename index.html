@@ -32,9 +32,20 @@
       </div>
     </div>
 
-    <!-- Active Orders Tabs Container -->
-    <div class="topbar-center" id="topbar-order-tabs">
-      <!-- Dynamically populated by uiRenderer -->
+    <!-- Topbar Module Navigation Tabs -->
+    <div class="topbar-center" style="display:flex; gap:6px;">
+      <button class="app-nav-item active" data-view="pos" style="padding:6px 12px; border-radius:6px; border:none; background:rgba(255,255,255,0.15); color:#fff; font-weight:600; font-size:12.5px; cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <i class="fas fa-cash-register"></i> <span>POS Terminal</span>
+      </button>
+      <button class="app-nav-item" data-view="kds" style="padding:6px 12px; border-radius:6px; border:none; background:transparent; color:rgba(255,255,255,0.8); font-weight:600; font-size:12.5px; cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <i class="fas fa-utensils"></i> <span>Kitchen Display (KDS)</span>
+      </button>
+      <button class="app-nav-item" data-view="tables" style="padding:6px 12px; border-radius:6px; border:none; background:transparent; color:rgba(255,255,255,0.8); font-weight:600; font-size:12.5px; cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <i class="fas fa-th"></i> <span>Floor & Tables</span>
+      </button>
+      <button class="app-nav-item" data-view="inventory" style="padding:6px 12px; border-radius:6px; border:none; background:transparent; color:rgba(255,255,255,0.8); font-weight:600; font-size:12.5px; cursor:pointer; display:flex; align-items:center; gap:6px;">
+        <i class="fas fa-boxes"></i> <span>Inventory & BOM</span>
+      </button>
     </div>
 
     <div class="topbar-right">
@@ -60,6 +71,7 @@
   <main class="pos-screen-wrapper">
 
     <!-- 1. MAIN ORDER SCREEN (DUAL PANE SPLIT VIEW) -->
+    <div class="app-view-screen active" id="view-pos-screen" style="width:100%; height:100%;">
     <section id="screen-order" class="pos-screen active">
       
       <!-- LEFT PANE: ORDER TICKET / CART -->
@@ -311,6 +323,74 @@
         </button>
       </div>
     </section>
+    </div><!-- End POS Screen -->
+
+    <!-- ======================================================================
+         2. KITCHEN DISPLAY SYSTEM (KDS) SCREEN VIEW
+         ====================================================================== -->
+    <div class="app-view-screen" id="view-kds-screen" style="display:none; width:100%; height:100%; flex-direction:column; background:var(--bg-app); padding:20px; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <div>
+          <div style="font-weight:700; font-size:22px; color:var(--text-main);">Kitchen Display System (KDS)</div>
+          <div style="font-size:13px; color:var(--text-muted);">Real-time Order Routing & Kitchen Workstation Queue</div>
+        </div>
+        <div style="display:flex; gap:16px;">
+          <div style="background:var(--bg-surface); padding:8px 16px; border-radius:8px; border:1px solid var(--border-color); text-align:center;">
+            <div style="font-size:11px; color:var(--text-muted);">Pending</div>
+            <div style="font-size:18px; font-weight:700; color:#f59e0b;" id="kds-count-pending">0</div>
+          </div>
+          <div style="background:var(--bg-surface); padding:8px 16px; border-radius:8px; border:1px solid var(--border-color); text-align:center;">
+            <div style="font-size:11px; color:var(--text-muted);">Preparing</div>
+            <div style="font-size:18px; font-weight:700; color:var(--odoo-teal);" id="kds-count-preparing">0</div>
+          </div>
+          <div style="background:var(--bg-surface); padding:8px 16px; border-radius:8px; border:1px solid var(--border-color); text-align:center;">
+            <div style="font-size:11px; color:var(--text-muted);">Ready</div>
+            <div style="font-size:18px; font-weight:700; color:#10b981;" id="kds-count-ready">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="kds-tickets-container" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap:16px;">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         3. RESTAURANT FLOOR & TABLE MAP SCREEN VIEW
+         ====================================================================== -->
+    <div class="app-view-screen" id="view-tables-screen" style="display:none; width:100%; height:100%; flex-direction:column; background:var(--bg-app); padding:20px; overflow-y:auto;">
+      <div style="font-weight:700; font-size:22px; color:var(--text-main); margin-bottom:4px;">Dining Floor & Table Map</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">Select a table to open/attach an order tab</div>
+
+      <div id="table-map-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:20px;">
+        <!-- Dynamically rendered -->
+      </div>
+    </div>
+
+    <!-- ======================================================================
+         4. INVENTORY & RECIPE BOM MANAGER SCREEN VIEW
+         ====================================================================== -->
+    <div class="app-view-screen" id="view-inventory-screen" style="display:none; width:100%; height:100%; flex-direction:column; background:var(--bg-app); padding:20px; overflow-y:auto;">
+      <div style="font-weight:700; font-size:22px; color:var(--text-main); margin-bottom:4px;">Inventory & Recipe BOM Manager</div>
+      <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">Live Raw Material Stock Levels & Composite Recipe Auto-Deduction Rules</div>
+
+      <div style="background:var(--bg-surface); border-radius:12px; border:1px solid var(--border-color); overflow:hidden; box-shadow:var(--shadow-sm);">
+        <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13.5px;">
+          <thead>
+            <tr style="background:var(--bg-surface-subtle); border-bottom:1px solid var(--border-color); color:var(--text-muted);">
+              <th style="padding:12px;">Item Name</th>
+              <th style="padding:12px;">Type</th>
+              <th style="padding:12px;">Current Stock</th>
+              <th style="padding:12px;">Cost / Price</th>
+              <th style="padding:12px; text-align:right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-table-body">
+            <!-- Dynamically rendered -->
+          </tbody>
+        </table>
+      </div>
+    </div>
   </main>
 
   <!-- ======================================================================
@@ -392,12 +472,139 @@
   <!-- ======================================================================
        MAIN APPLICATION ENTRY POINT
        ====================================================================== -->
+  <!-- ======================================================================
+       MAIN APPLICATION ENTRY POINT & EVENT BINDINGS
+       ====================================================================== -->
   <script type="module">
-    import { PosController } from './js/posController.js';
+    import { AppModule } from './js/appModule.js';
 
     document.addEventListener('DOMContentLoaded', () => {
-      window.posApp = new PosController();
-      window.posApp.init();
+      window.app = new AppModule();
+      window.app.init();
+
+      // Numpad Digit & Mode Binding
+      document.querySelectorAll('.numpad-digit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const val = btn.getAttribute('data-val');
+          if (val === 'backspace') window.posApp.handleNumpadBackspace();
+          else window.posApp.handleNumpadDigit(val);
+        });
+      });
+
+      document.querySelectorAll('.numpad-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.numpad-mode-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          window.posApp.setNumpadMode(btn.getAttribute('data-mode'));
+        });
+      });
+
+      // Navigation & Screens
+      const btnPay = document.getElementById('btn-pay-huge');
+      const screenOrder = document.getElementById('screen-order');
+      const screenPayment = document.getElementById('screen-payment');
+      const screenReceipt = document.getElementById('screen-receipt');
+      const btnBack = document.getElementById('btn-back-to-order');
+      const btnValidate = document.getElementById('btn-validate-order');
+      const btnNextOrder = document.getElementById('btn-next-order');
+
+      if (btnPay) {
+        btnPay.addEventListener('click', () => {
+          const order = window.posApp.getActiveOrder();
+          if (!order.lines || order.lines.length === 0) {
+            alert('Cart is empty!');
+            return;
+          }
+          const totals = window.posApp.calculateOrderTotals(order);
+          document.getElementById('pay-screen-total').innerText = '$' + totals.total.toFixed(2);
+          document.getElementById('pay-screen-tendered').innerText = '$' + totals.total.toFixed(2);
+          document.getElementById('pay-screen-change').innerText = '$0.00';
+          window.posApp.tenderedAmount = totals.total;
+
+          screenOrder.classList.remove('active');
+          screenPayment.classList.add('active');
+        });
+      }
+
+      if (btnBack) {
+        btnBack.addEventListener('click', () => {
+          screenPayment.classList.remove('active');
+          screenOrder.classList.add('active');
+        });
+      }
+
+      // Quick Cash Tender Buttons
+      document.querySelectorAll('.btn-quick-cash').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const order = window.posApp.getActiveOrder();
+          const totals = window.posApp.calculateOrderTotals(order);
+          const val = btn.getAttribute('data-amount');
+          let amt = totals.total;
+          if (val !== 'exact') amt = parseFloat(val);
+
+          window.posApp.tenderedAmount = amt;
+          const change = Math.max(0, amt - totals.total);
+          document.getElementById('pay-screen-tendered').innerText = '$' + amt.toFixed(2);
+          document.getElementById('pay-screen-change').innerText = '$' + change.toFixed(2);
+        });
+      });
+
+      // Validate Order Checkout
+      if (btnValidate) {
+        btnValidate.addEventListener('click', () => {
+          const method = document.querySelector('.payment-method-btn.active')?.getAttribute('data-method') || 'Cash';
+          window.posApp.processCheckout(method, window.posApp.tenderedAmount);
+          screenPayment.classList.remove('active');
+          screenReceipt.classList.add('active');
+        });
+      }
+
+      if (btnNextOrder) {
+        btnNextOrder.addEventListener('click', () => {
+          screenReceipt.classList.remove('active');
+          screenOrder.classList.add('active');
+        });
+      }
+
+      // Barcode Demo Button
+      const btnDemoBarcode = document.getElementById('btn-demo-barcode');
+      if (btnDemoBarcode) {
+        btnDemoBarcode.addEventListener('click', () => {
+          // Scan Double Bacon Cheeseburger (barcode: 8801001)
+          const match = window.posApp.products.find(p => p.barcode === '8801001');
+          if (match) window.posApp.addProductToOrder(match);
+        });
+      }
+
+      // Payment Method selector
+      document.querySelectorAll('.payment-method-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.payment-method-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        });
+      });
+
+      // Close Session Modal & Z-Report
+      const btnCloseSession = document.getElementById('btn-close-session');
+      const cashControlModal = document.getElementById('cash-control-modal-overlay');
+      const btnModalClose = document.querySelectorAll('.btn-modal-close');
+
+      if (btnCloseSession && cashControlModal) {
+        btnCloseSession.addEventListener('click', () => {
+          const expected = window.posApp.session.openingBalance + window.posApp.session.cashSalesTotal;
+          document.getElementById('cash-open-balance').innerText = '$' + window.posApp.session.openingBalance.toFixed(2);
+          document.getElementById('cash-sales-total').innerText = '$' + window.posApp.session.cashSalesTotal.toFixed(2);
+          document.getElementById('cash-expected-total').innerText = '$' + expected.toFixed(2);
+          document.getElementById('cash-actual-input').value = expected.toFixed(2);
+          cashControlModal.style.display = 'flex';
+        });
+      }
+
+      btnModalClose.forEach(btn => {
+        btn.addEventListener('click', () => {
+          cashControlModal.style.display = 'none';
+        });
+      });
     });
   </script>
 </body>

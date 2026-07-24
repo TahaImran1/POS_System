@@ -1,8 +1,18 @@
 // ============================================================================
-// ODOO POS CONTROLLER & STATE MACHINE
+// ENTERPRISE POS CONTROLLER & STATE MACHINE
 // ============================================================================
 
-import { STORE_INFO, POS_CATEGORIES, POS_PRODUCTS, POS_CUSTOMERS } from './mockData.js';
+import { 
+  STORE_INFO, 
+  TAX_GROUPS, 
+  PRICELISTS, 
+  POS_CATEGORIES, 
+  RAW_INGREDIENTS, 
+  POS_PRODUCTS, 
+  POS_CUSTOMERS, 
+  RESTAURANT_TABLES 
+} from './mockData.js';
+
 import { sounds } from './soundEffects.js';
 import {
   renderOrderTabs,
@@ -11,8 +21,8 @@ import {
   renderProductGrid,
   renderOrderLines,
   renderOrderSummary,
-  renderCustomerModalList,
   renderThermalReceipt,
+  renderZReportReceipt,
   formatCurrency,
   showToast
 } from './uiRenderer.js';
@@ -20,20 +30,39 @@ import {
 export class PosController {
   constructor() {
     this.storeInfo = { ...STORE_INFO };
+    this.taxGroups = TAX_GROUPS;
+    this.pricelists = PRICELISTS;
     this.categories = POS_CATEGORIES;
+    this.rawIngredients = { ...RAW_INGREDIENTS };
     this.products = POS_PRODUCTS;
     this.customers = POS_CUSTOMERS;
+    this.tables = RESTAURANT_TABLES;
 
-    // Concurrent orders state
+    // Active Pricelist & Tax Setting
+    this.activePricelistId = "standard";
+
+    // Cash Register Session State
+    this.session = {
+      status: "OPEN", // "OPEN" | "CLOSED"
+      sessionNumber: "POS/2026/0089",
+      openedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      openingBalance: 1000.00,
+      cashSalesTotal: 0.00,
+      bankSalesTotal: 0.00,
+      creditSalesTotal: 0.00,
+      cashDrops: []
+    };
+
+    // Active Orders (Concurrent & Tables)
     this.orders = [
       {
         id: 1,
-        name: "Order 1",
+        name: "Order 1 (Table 1)",
+        tableId: "T1",
         lines: [],
-        customer: null,
+        customer: this.customers[2], // Walk-in
         paymentMethod: "Cash",
-        tenderedAmount: 0,
-        note: ""
+        tenderedAmount: 0
       }
     ];
     this.activeOrderIndex = 0;
@@ -41,31 +70,32 @@ export class PosController {
 
     // Numpad state
     this.numpadMode = 'qty'; // 'qty' | 'disc' | 'price'
-    this.numpadBuffer = ""; // stores string digits while typing
+    this.numpadBuffer = "";
 
-    // Catalog search & filter state
+    // Search & Filter
     this.activeCategory = "all";
     this.searchQuery = "";
 
-    // Payment state
-    this.paymentMethod = "Cash";
-    this.tenderedAmount = 0;
-    this.invoiceRequested = false;
-
-    // Cash Control state
-    this.cashSales = 0;
+    // Hardware Scanner Listener
+    this.lastKeyTime = 0;
+    this.barcodeBuffer = "";
   }
 
   init() {
-    this.bindEvents();
+    this.bindGlobalEvents();
+    this.bindBarcodeScanner();
     this.renderAll();
-    // Default select first product demo line for immediate wow factor
-    this.addProductToOrder(this.products[0], false);
-    this.addProductToOrder(this.products[10], false); // Espresso
+    
+    // Add default initial demo item with BOM
+    this.addProductToOrder(this.products[0], false); // Double Bacon Cheeseburger
   }
 
   getActiveOrder() {
     return this.orders[this.activeOrderIndex];
+  }
+
+  getActivePricelist() {
+    return this.pricelists.find(p => p.id === this.activePricelistId) || this.pricelists[0];
   }
 
   renderAll() {
@@ -82,540 +112,355 @@ export class PosController {
     renderOrderSummary(order);
   }
 
-  // --- CONCURRENT ORDERS MANAGEMENT ---
-  switchOrderTab(index) {
-    if (index >= 0 && index < this.orders.length) {
-      this.activeOrderIndex = index;
-      this.selectedLineIndex = this.getActiveOrder().lines.length - 1;
-      this.numpadBuffer = "";
-      sounds.playClick();
-      this.renderAll();
-    }
+  // --- PRICELIST & CUSTOMER MANAGEMENT ---
+  setPricelist(pricelistId) {
+    this.activePricelistId = pricelistId;
+    const pricelist = this.getActivePricelist();
+    showToast(`Pricelist updated: ${pricelist.name}`, 'info');
+    this.renderCart();
   }
 
-  createNewOrder() {
-    const newId = this.orders.length + 1;
-    this.orders.push({
-      id: newId,
-      name: `Order ${newId}`,
-      lines: [],
-      customer: null,
-      paymentMethod: "Cash",
-      tenderedAmount: 0,
-      note: ""
-    });
-    this.switchOrderTab(this.orders.length - 1);
-    showToast(`Started ${this.getActiveOrder().name}`, 'success');
-  }
-
-  // --- CATALOG SEARCH & FILTERING ---
-  setCategory(categoryId) {
-    this.activeCategory = categoryId;
-    sounds.playClick();
-    renderCategoryChips(this.categories, this.activeCategory, (catId) => this.setCategory(catId));
-    this.filterAndRenderProducts();
-  }
-
-  handleSearch(query) {
-    this.searchQuery = query.trim().toLowerCase();
-    this.filterAndRenderProducts();
-  }
-
-  filterAndRenderProducts() {
-    let filtered = this.products;
-
-    if (this.activeCategory !== "all") {
-      filtered = filtered.filter(p => p.category === this.activeCategory);
-    }
-
-    if (this.searchQuery) {
-      filtered = filtered.filter(p =>
-        p.name.toLowerCase().includes(this.searchQuery) ||
-        p.sku.toLowerCase().includes(this.searchQuery) ||
-        p.barcode.includes(this.searchQuery)
-      );
-    }
-
-    renderProductGrid(filtered, (product) => this.addProductToOrder(product, true));
-  }
-
-  // --- ORDER LINE MANAGEMENT ---
-  addProductToOrder(product, playSound = true) {
+  setCustomer(customer) {
     const order = this.getActiveOrder();
+    order.customer = customer;
+    if (customer.pricelistId) {
+      this.activePricelistId = customer.pricelistId;
+    }
+    sounds.playClick();
+    showToast(`Attached Customer: ${customer.name}`, 'success');
+    this.renderAll();
+  }
 
-    // Check if product already exists in lines
-    const existingIndex = order.lines.findIndex(l => l.product.id === product.id && !l.note);
+  // --- PRODUCT SELECTION & BOM AUTO-DEDUCTION ---
+  addProductToOrder(product, playSound = true) {
+    if (this.session.status === "CLOSED") {
+      showToast("Cannot add items. Cash Session is CLOSED! Please Open Session.", "warning");
+      return;
+    }
 
-    if (existingIndex !== -1) {
+    const order = this.getActiveOrder();
+    const existingIndex = order.lines.findIndex(line => line.product.id === product.id);
+
+    // Apply pricelist factor
+    const factor = this.getActivePricelist().discountFactor;
+    const effectivePrice = product.price * factor;
+
+    if (existingIndex >= 0) {
       order.lines[existingIndex].quantity += 1;
       this.selectedLineIndex = existingIndex;
     } else {
       order.lines.push({
         product: product,
+        unitPrice: effectivePrice,
         quantity: 1,
-        price: product.price,
-        discount: 0,
-        note: ""
+        discountPerc: 0,
+        taxGroupId: product.taxGroupId || "vat10_inc"
       });
       this.selectedLineIndex = order.lines.length - 1;
     }
 
-    if (playSound) {
-      sounds.playBeep();
-    }
-
     this.numpadBuffer = "";
-    this.renderAll();
-  }
-
-  selectLine(index) {
-    this.selectedLineIndex = index;
-    this.numpadBuffer = "";
-    sounds.playClick();
+    if (playSound) sounds.playBeep();
     this.renderCart();
   }
 
-  // --- EXACT ODOO NUMPAD & MODES ENGINE ---
+  // --- NUMPAD OPERATIONS ---
   setNumpadMode(mode) {
     this.numpadMode = mode;
     this.numpadBuffer = "";
     sounds.playClick();
-
-    // Update active mode UI styles
-    document.querySelectorAll('.numpad-mode-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-mode') === mode);
-    });
+    this.renderCart();
   }
 
-  handleNumpadInput(val) {
+  handleNumpadDigit(digit) {
     const order = this.getActiveOrder();
-    if (order.lines.length === 0 || this.selectedLineIndex === -1) {
-      sounds.playError();
-      showToast("Please select or add a product line first", 'error');
-      return;
-    }
+    if (this.selectedLineIndex < 0 || this.selectedLineIndex >= order.lines.length) return;
 
-    const currentLine = order.lines[this.selectedLineIndex];
+    const line = order.lines[this.selectedLineIndex];
 
-    if (val === 'backspace') {
-      sounds.playClick();
-      if (this.numpadBuffer.length > 0) {
-        this.numpadBuffer = this.numpadBuffer.slice(0, -1);
+    if (digit === '+/-') {
+      if (this.numpadMode === 'disc') {
+        line.discountPerc = line.discountPerc ? 0 : 10;
       } else {
-        // If buffer empty, remove item or drop by 1
-        if (currentLine.quantity > 1) {
-          currentLine.quantity -= 1;
-        } else {
-          order.lines.splice(this.selectedLineIndex, 1);
-          this.selectedLineIndex = order.lines.length - 1;
-        }
-        this.renderAll();
-        return;
+        line.quantity = -line.quantity;
       }
-    } else if (val === '+/-') {
       sounds.playClick();
-      currentLine.quantity *= -1;
       this.renderCart();
       return;
-    } else {
-      sounds.playClick();
-      this.numpadBuffer += val;
     }
 
-    const parsedVal = parseFloat(this.numpadBuffer);
-    if (isNaN(parsedVal)) {
-      this.renderCart();
-      return;
+    if (digit === '.') {
+      if (!this.numpadBuffer.includes('.')) {
+        this.numpadBuffer += '.';
+      }
+    } else {
+      this.numpadBuffer += digit;
     }
+
+    const value = parseFloat(this.numpadBuffer) || 0;
 
     if (this.numpadMode === 'qty') {
-      currentLine.quantity = parsedVal;
+      line.quantity = Math.max(1, value);
     } else if (this.numpadMode === 'disc') {
-      currentLine.discount = Math.min(100, Math.max(0, parsedVal));
-    } else if (this.numpadMode === 'price') {
-      currentLine.price = parsedVal;
-    }
-
-    this.renderCart();
-  }
-
-  // --- ACTION BUTTONS (Customer, Note, Refund, Info) ---
-  handleNoteAction() {
-    const order = this.getActiveOrder();
-    if (this.selectedLineIndex === -1 || !order.lines[this.selectedLineIndex]) {
-      showToast("Select a line item to attach a note", 'error');
-      return;
-    }
-    const currentLine = order.lines[this.selectedLineIndex];
-    const noteInput = prompt("Enter kitchen/internal note for line item:", currentLine.note || "");
-    if (noteInput !== null) {
-      currentLine.note = noteInput.trim();
-      sounds.playClick();
-      this.renderCart();
-    }
-  }
-
-  handleRefundAction() {
-    const order = this.getActiveOrder();
-    if (this.selectedLineIndex === -1 || !order.lines[this.selectedLineIndex]) {
-      showToast("Select an item to refund", 'error');
-      return;
-    }
-    const currentLine = order.lines[this.selectedLineIndex];
-    currentLine.quantity = -Math.abs(currentLine.quantity);
-    sounds.playClick();
-    this.renderCart();
-    showToast("Switched line to refund mode (-qty)", 'success');
-  }
-
-  handleInfoAction() {
-    const order = this.getActiveOrder();
-    if (this.selectedLineIndex === -1 || !order.lines[this.selectedLineIndex]) {
-      showToast("Select an item to view details", 'error');
-      return;
-    }
-    const item = order.lines[this.selectedLineIndex].product;
-    this.openProductDetailsModal(item);
-  }
-
-  // --- DEMO BARCODE SCANNER SIMULATION ---
-  simulateBarcodeScan() {
-    const randomProduct = this.products[Math.floor(Math.random() * this.products.length)];
-    this.addProductToOrder(randomProduct, true);
-    showToast(`Scanned SKU ${randomProduct.barcode}: ${randomProduct.name}`, 'success');
-  }
-
-  // --- CUSTOMER MODAL MANAGEMENT ---
-  openCustomerModal() {
-    sounds.playClick();
-    const modalOverlay = document.getElementById('customer-modal-overlay');
-    const searchInput = document.getElementById('customer-search-input');
-    if (modalOverlay) {
-      modalOverlay.classList.add('active');
-      renderCustomerModalList(this.customers, this.getActiveOrder().customer, (cust) => this.selectCustomer(cust));
-      if (searchInput) {
-        searchInput.value = '';
-        searchInput.focus();
+      if (value > 20) {
+        // Prompt for Manager PIN on high discounts
+        const pin = prompt("Discounts over 20% require Manager PIN (Default: 9999):");
+        if (pin !== this.storeInfo.managerPin) {
+          showToast("Invalid Manager PIN. Discount rejected.", "warning");
+          this.numpadBuffer = "";
+          return;
+        }
       }
+      line.discountPerc = Math.min(100, Math.max(0, value));
+    } else if (this.numpadMode === 'price') {
+      line.unitPrice = Math.max(0, value);
     }
-  }
 
-  closeCustomerModal() {
-    const modalOverlay = document.getElementById('customer-modal-overlay');
-    if (modalOverlay) modalOverlay.classList.remove('active');
-  }
-
-  selectCustomer(customer) {
-    this.getActiveOrder().customer = customer;
     sounds.playClick();
-    this.closeCustomerModal();
-    this.renderAll();
-    showToast(`Assigned customer: ${customer.name}`, 'success');
+    this.renderCart();
   }
 
-  filterCustomerModal(query) {
-    const q = query.trim().toLowerCase();
-    const filtered = this.customers.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.email.toLowerCase().includes(q) ||
-      c.phone.includes(q)
-    );
-    renderCustomerModalList(filtered, this.getActiveOrder().customer, (cust) => this.selectCustomer(cust));
+  handleNumpadBackspace() {
+    const order = this.getActiveOrder();
+    if (this.selectedLineIndex < 0 || this.selectedLineIndex >= order.lines.length) return;
+
+    if (this.numpadBuffer.length > 0) {
+      this.numpadBuffer = this.numpadBuffer.slice(0, -1);
+      const val = parseFloat(this.numpadBuffer) || 0;
+      const line = order.lines[this.selectedLineIndex];
+      if (this.numpadMode === 'qty') line.quantity = Math.max(1, val);
+      else if (this.numpadMode === 'disc') line.discountPerc = val;
+      else if (this.numpadMode === 'price') line.unitPrice = val;
+    } else {
+      // Remove line item
+      order.lines.splice(this.selectedLineIndex, 1);
+      this.selectedLineIndex = order.lines.length - 1;
+    }
+
+    sounds.playClick();
+    this.renderCart();
   }
 
-  // --- PRODUCT DETAILS MODAL ---
-  openProductDetailsModal(product) {
-    const modalOverlay = document.getElementById('product-info-modal-overlay');
-    const content = document.getElementById('product-info-modal-content');
-    if (!modalOverlay || !content) return;
-
-    content.innerHTML = `
-      <div style="display:flex; gap:20px; align-items:center;">
-        <div style="width:140px; height:140px; background:var(--bg-surface-subtle); border-radius:12px; display:flex; align-items:center; justify-content:center;">
-          <img src="${product.image}" alt="${product.name}" style="max-width:110px; max-height:110px;" />
-        </div>
-        <div>
-          <div style="font-family:var(--font-heading); font-size:18px; font-weight:700;">${product.name}</div>
-          <div style="font-family:var(--font-mono); font-size:13px; color:var(--text-muted); margin:4px 0;">SKU: ${product.sku} | Barcode: ${product.barcode}</div>
-          <div style="font-size:20px; font-weight:700; color:var(--odoo-teal); margin-top:8px;">${formatCurrency(product.price)}</div>
-          <div style="font-size:13px; color:var(--text-muted); margin-top:8px;">${product.description}</div>
-          <div style="margin-top:12px; display:inline-block; padding:4px 10px; border-radius:6px; background:var(--odoo-teal-light); color:var(--odoo-teal); font-weight:600; font-size:12px;">
-            Stock Available: ${product.stock} units
-          </div>
-        </div>
-      </div>
-    `;
-
-    modalOverlay.classList.add('active');
-  }
-
-  closeProductDetailsModal() {
-    const modalOverlay = document.getElementById('product-info-modal-overlay');
-    if (modalOverlay) modalOverlay.classList.remove('active');
-  }
-
-  // --- SCREEN SWITCHING & PAYMENT WORKFLOW ---
-  switchScreen(screenId) {
-    document.querySelectorAll('.pos-screen').forEach(s => s.classList.remove('active'));
-    const target = document.getElementById(screenId);
-    if (target) target.classList.add('active');
-  }
-
-  goToPaymentScreen() {
+  // --- CHECKOUT & BOM INGREDIENT AUTO-DEDUCTION ---
+  processCheckout(paymentMethod, tenderedAmount) {
     const order = this.getActiveOrder();
     if (order.lines.length === 0) {
-      sounds.playError();
-      showToast("Order is empty! Please add products before payment.", 'error');
+      showToast("Order ticket is empty!", "warning");
       return;
     }
 
-    sounds.playClick();
-    let total = this.calculateOrderTotal(order);
-    this.tenderedAmount = total; // default exact tender
-    order.tenderedAmount = total;
-    order.paymentMethod = this.paymentMethod;
-
-    this.updatePaymentScreenUI();
-    this.switchScreen('screen-payment');
-  }
-
-  calculateOrderTotal(order) {
-    let subtotal = 0;
+    // Auto-deduct Recipe Ingredients (BOM)
+    const deductedItems = [];
     order.lines.forEach(line => {
-      subtotal += line.price * line.quantity * (1 - (line.discount || 0) / 100);
-    });
-    return subtotal * 1.10; // +10% VAT
-  }
-
-  setPaymentMethod(methodName) {
-    this.paymentMethod = methodName;
-    this.getActiveOrder().paymentMethod = methodName;
-    sounds.playClick();
-
-    document.querySelectorAll('.payment-method-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-method') === methodName);
-    });
-    this.updatePaymentScreenUI();
-  }
-
-  addQuickTender(amount) {
-    sounds.playClick();
-    if (amount === 'exact') {
-      this.tenderedAmount = this.calculateOrderTotal(this.getActiveOrder());
-    } else {
-      this.tenderedAmount += amount;
-    }
-    this.getActiveOrder().tenderedAmount = this.tenderedAmount;
-    this.updatePaymentScreenUI();
-  }
-
-  handlePaymentNumpad(char) {
-    sounds.playClick();
-    let str = this.tenderedAmount.toString();
-
-    if (char === 'backspace') {
-      str = str.slice(0, -1) || "0";
-    } else {
-      if (str === "0") str = char;
-      else str += char;
-    }
-
-    this.tenderedAmount = parseFloat(str) || 0;
-    this.getActiveOrder().tenderedAmount = this.tenderedAmount;
-    this.updatePaymentScreenUI();
-  }
-
-  updatePaymentScreenUI() {
-    const order = this.getActiveOrder();
-    const total = this.calculateOrderTotal(order);
-    const change = Math.max(0, this.tenderedAmount - total);
-
-    const totalEl = document.getElementById('pay-screen-total');
-    const tenderedEl = document.getElementById('pay-screen-tendered');
-    const changeEl = document.getElementById('pay-screen-change');
-    const validateBtn = document.getElementById('btn-validate-order');
-
-    if (totalEl) totalEl.textContent = formatCurrency(total);
-    if (tenderedEl) tenderedEl.textContent = formatCurrency(this.tenderedAmount);
-    if (changeEl) changeEl.textContent = formatCurrency(change);
-
-    if (validateBtn) {
-      // Odoo POS allows validation when tendered >= total (or customer credit)
-      const canValidate = this.tenderedAmount >= total - 0.001 || this.paymentMethod === 'Customer Account';
-      validateBtn.disabled = !canValidate;
-    }
-  }
-
-  validateAndPrintReceipt() {
-    const order = this.getActiveOrder();
-    const total = this.calculateOrderTotal(order);
-
-    sounds.playSuccess();
-    this.cashSales += total;
-
-    renderThermalReceipt(order, this.storeInfo);
-    this.switchScreen('screen-receipt');
-  }
-
-  startNextOrder() {
-    sounds.playClick();
-    // Clear current order lines
-    const order = this.getActiveOrder();
-    order.lines = [];
-    order.customer = null;
-    order.note = "";
-    this.selectedLineIndex = -1;
-
-    this.switchScreen('screen-order');
-    this.renderAll();
-    showToast("Ready for next order!", 'success');
-  }
-
-  // --- SESSION & CASH CONTROL MODAL ---
-  openCashControlModal() {
-    sounds.playClick();
-    const modalOverlay = document.getElementById('cash-control-modal-overlay');
-    if (!modalOverlay) return;
-
-    const openBalEl = document.getElementById('cash-open-balance');
-    const salesEl = document.getElementById('cash-sales-total');
-    const expectedEl = document.getElementById('cash-expected-total');
-    const actualInput = document.getElementById('cash-actual-input');
-    const diffEl = document.getElementById('cash-diff-display');
-
-    const expected = this.storeInfo.openingBalance + this.cashSales;
-
-    if (openBalEl) openBalEl.textContent = formatCurrency(this.storeInfo.openingBalance);
-    if (salesEl) salesEl.textContent = formatCurrency(this.cashSales);
-    if (expectedEl) expectedEl.textContent = formatCurrency(expected);
-    if (actualInput) actualInput.value = expected.toFixed(2);
-    if (diffEl) diffEl.textContent = "$0.00";
-
-    modalOverlay.classList.add('active');
-  }
-
-  closeCashControlModal() {
-    const modalOverlay = document.getElementById('cash-control-modal-overlay');
-    if (modalOverlay) modalOverlay.classList.remove('active');
-  }
-
-  // --- THEME TOGGLE (LIGHT / DARK) ---
-  toggleDarkMode() {
-    const current = document.documentElement.getAttribute('data-theme');
-    const newTheme = current === 'dark' ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', newTheme);
-    sounds.playClick();
-    showToast(`Switched to ${newTheme.toUpperCase()} mode`, 'success');
-  }
-
-  // --- EVENT LISTENERS BINDING ---
-  bindEvents() {
-    // Search bar
-    const searchInput = document.getElementById('catalog-search-input');
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => this.handleSearch(e.target.value));
-    }
-
-    // Barcode scan demo button
-    const barcodeBtn = document.getElementById('btn-demo-barcode');
-    if (barcodeBtn) {
-      barcodeBtn.addEventListener('click', () => this.simulateBarcodeScan());
-    }
-
-    // Numpad Mode Buttons
-    document.querySelectorAll('.numpad-mode-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.setNumpadMode(btn.getAttribute('data-mode')));
-    });
-
-    // Numpad Digit / Backspace Buttons
-    document.querySelectorAll('.numpad-digit-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.handleNumpadInput(btn.getAttribute('data-val')));
-    });
-
-    // Action bar buttons
-    const btnNote = document.getElementById('btn-action-note');
-    const btnRefund = document.getElementById('btn-action-refund');
-    const btnInfo = document.getElementById('btn-action-info');
-    const btnCustomer = document.getElementById('btn-action-customer');
-
-    if (btnNote) btnNote.addEventListener('click', () => this.handleNoteAction());
-    if (btnRefund) btnRefund.addEventListener('click', () => this.handleRefundAction());
-    if (btnInfo) btnInfo.addEventListener('click', () => this.handleInfoAction());
-    if (btnCustomer) btnCustomer.addEventListener('click', () => this.openCustomerModal());
-
-    // Big Payment Button
-    const btnPay = document.getElementById('btn-pay-huge');
-    if (btnPay) btnPay.addEventListener('click', () => this.goToPaymentScreen());
-
-    // Payment screen back button
-    const btnBackOrder = document.getElementById('btn-back-to-order');
-    if (btnBackOrder) btnBackOrder.addEventListener('click', () => {
-      sounds.playClick();
-      this.switchScreen('screen-order');
-    });
-
-    // Payment methods
-    document.querySelectorAll('.payment-method-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.setPaymentMethod(btn.getAttribute('data-method')));
-    });
-
-    // Payment quick cash
-    document.querySelectorAll('.btn-quick-cash').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const val = btn.getAttribute('data-amount');
-        this.addQuickTender(val === 'exact' ? 'exact' : parseFloat(val));
-      });
-    });
-
-    // Payment Numpad
-    document.querySelectorAll('.pay-numpad-btn').forEach(btn => {
-      btn.addEventListener('click', () => this.handlePaymentNumpad(btn.getAttribute('data-val')));
-    });
-
-    // Validate Order button
-    const btnValidate = document.getElementById('btn-validate-order');
-    if (btnValidate) btnValidate.addEventListener('click', () => this.validateAndPrintReceipt());
-
-    // Receipt screen buttons
-    const btnNext = document.getElementById('btn-next-order');
-    if (btnNext) btnNext.addEventListener('click', () => this.startNextOrder());
-
-    const btnPrint = document.getElementById('btn-print-receipt');
-    if (btnPrint) btnPrint.addEventListener('click', () => {
-      sounds.playClick();
-      window.print();
-    });
-
-    // Topbar actions
-    const btnCloseSession = document.getElementById('btn-close-session');
-    if (btnCloseSession) btnCloseSession.addEventListener('click', () => this.openCashControlModal());
-
-    const btnThemeToggle = document.getElementById('btn-theme-toggle');
-    if (btnThemeToggle) btnThemeToggle.addEventListener('click', () => this.toggleDarkMode());
-
-    // Modal close buttons
-    document.querySelectorAll('.btn-modal-close').forEach(btn => {
-      btn.addEventListener('click', () => {
-        sounds.playClick();
-        this.closeCustomerModal();
-        this.closeProductDetailsModal();
-        this.closeCashControlModal();
-      });
-    });
-
-    // Customer search inside modal
-    const custSearch = document.getElementById('customer-search-input');
-    if (custSearch) {
-      custSearch.addEventListener('input', (e) => this.filterCustomerModal(e.target.value));
-    }
-
-    // Keyboard shortcuts support (Odoo POS hotkeys)
-    window.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        this.closeCustomerModal();
-        this.closeProductDetailsModal();
-        this.closeCashControlModal();
+      if (line.product.bom) {
+        line.product.bom.forEach(bomEntry => {
+          const raw = this.rawIngredients[bomEntry.ingredientId];
+          if (raw) {
+            const consumed = bomEntry.qty * line.quantity;
+            raw.stock = Math.max(0, raw.stock - consumed);
+            deductedItems.push(`${consumed}${raw.uom} ${raw.name}`);
+          }
+        });
       }
     });
+
+    // Record financial session totals
+    const grandTotal = this.calculateOrderTotals(order).total;
+    if (paymentMethod === "Cash") this.session.cashSalesTotal += grandTotal;
+    else if (paymentMethod === "Bank") this.session.bankSalesTotal += grandTotal;
+    else if (paymentMethod === "Credit") this.session.creditSalesTotal += grandTotal;
+
+    sounds.playSuccess();
+    if (deductedItems.length > 0) {
+      showToast(`BOM Auto-Deducted: ${deductedItems.join(', ')}`, 'info');
+    }
+    showToast(`Order Completed via ${paymentMethod}!`, 'success');
+
+    // Show thermal receipt
+    renderThermalReceipt(order, paymentMethod, tenderedAmount, this.storeInfo);
+
+    // Clear completed order tab
+    order.lines = [];
+    this.selectedLineIndex = -1;
+    this.renderCart();
+  }
+
+  // --- CASH SESSION OPEN / CLOSE (Z-REPORT) ---
+  openSession(floatAmount) {
+    this.session.status = "OPEN";
+    this.session.openingBalance = floatAmount;
+    this.session.cashSalesTotal = 0;
+    this.session.bankSalesTotal = 0;
+    this.session.creditSalesTotal = 0;
+    showToast(`Cash Session Opened with ${formatCurrency(floatAmount)} Float`, 'success');
+  }
+
+  closeSessionBlindCount(actualCashCounted) {
+    const expectedCash = this.session.openingBalance + this.session.cashSalesTotal;
+    const variance = actualCashCounted - expectedCash;
+
+    this.session.status = "CLOSED";
+    showToast(`Session Closed. Cash Variance: ${formatCurrency(variance)}`, variance === 0 ? 'success' : 'warning');
+    
+    // Render Z-Report
+    renderZReportReceipt(this.session, actualCashCounted, expectedCash, variance, this.storeInfo);
+  }
+
+  // --- ORDER TOTALS & TAX ENGINE ---
+  calculateOrderTotals(order) {
+    let subtotal = 0;
+    let taxTotal = 0;
+
+    order.lines.forEach(line => {
+      const lineSubtotal = line.unitPrice * line.quantity * (1 - line.discountPerc / 100);
+      const taxGroup = TAX_GROUPS.find(t => t.id === line.taxGroupId) || TAX_GROUPS[0];
+      
+      if (taxGroup.isInclusive) {
+        const base = lineSubtotal / (1 + taxGroup.rate);
+        const tax = lineSubtotal - base;
+        subtotal += base;
+        taxTotal += tax;
+      } else {
+        const tax = lineSubtotal * taxGroup.rate;
+        subtotal += lineSubtotal;
+        taxTotal += tax;
+      }
+    });
+
+    return {
+      subtotal,
+      taxTotal,
+      total: subtotal + taxTotal
+    };
+  }
+
+  // --- SEARCH & FILTER ---
+  setCategory(catId) {
+    this.activeCategory = catId;
+    sounds.playClick();
+    this.renderAll();
+  }
+
+  filterAndRenderProducts() {
+    let filtered = this.products;
+    if (this.activeCategory !== 'all') {
+      filtered = filtered.filter(p => p.category === this.activeCategory);
+    }
+    if (this.searchQuery.trim()) {
+      const q = this.searchQuery.toLowerCase();
+      filtered = filtered.filter(p => p.name.toLowerCase().includes(q) || p.barcode.includes(q) || p.sku.toLowerCase().includes(q));
+    }
+    renderProductGrid(filtered, (product) => this.addProductToOrder(product));
+  }
+
+  // --- HARDWARE BARCODE SCANNER & PHYSICAL KEYBOARD LISTENER ---
+  bindBarcodeScanner() {
+    window.addEventListener('keydown', (e) => {
+      // Ignore if typing inside input text fields or modals
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (document.querySelector('.odoo-modal-overlay[style*="display: flex"]')) return;
+
+      const currentTime = Date.now();
+      const char = e.key;
+
+      // Handle physical keyboard shortcuts for instant cart editing
+      if (char >= '0' && char <= '9') {
+        this.handleNumpadDigit(char);
+      } else if (char === '.' || char === ',') {
+        this.handleNumpadDigit('.');
+      } else if (char === 'Backspace' || char === 'Delete') {
+        e.preventDefault();
+        this.handleNumpadBackspace();
+      } else if (char === '+' || char === '=') {
+        e.preventDefault();
+        const order = this.getActiveOrder();
+        if (this.selectedLineIndex >= 0 && this.selectedLineIndex < order.lines.length) {
+          order.lines[this.selectedLineIndex].quantity += 1;
+          this.renderCart();
+        }
+      } else if (char === '-') {
+        e.preventDefault();
+        const order = this.getActiveOrder();
+        if (this.selectedLineIndex >= 0 && this.selectedLineIndex < order.lines.length) {
+          if (order.lines[this.selectedLineIndex].quantity > 1) {
+            order.lines[this.selectedLineIndex].quantity -= 1;
+          } else {
+            order.lines.splice(this.selectedLineIndex, 1);
+            this.selectedLineIndex = order.lines.length - 1;
+          }
+          this.renderCart();
+        }
+      }
+
+      // Barcode Scanner Timing Interceptor
+      if (currentTime - this.lastKeyTime > 35) {
+        this.barcodeBuffer = "";
+      }
+      this.lastKeyTime = currentTime;
+
+      if (char === 'Enter') {
+        if (this.barcodeBuffer.length >= 3) {
+          const match = this.products.find(p => p.barcode === this.barcodeBuffer || p.sku === this.barcodeBuffer);
+          if (match) {
+            this.addProductToOrder(match);
+            showToast(`Scanned Barcode: ${match.name}`, 'success');
+          }
+        }
+        this.barcodeBuffer = "";
+      } else if (char.length === 1 && char >= '0' && char <= '9') {
+        this.barcodeBuffer += char;
+      }
+    });
+  }
+
+  bindGlobalEvents() {
+    const searchInput = document.getElementById('catalog-search-input') || document.getElementById('search-products');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.searchQuery = e.target.value;
+        this.filterAndRenderProducts();
+      });
+    }
+
+    const demoBtn = document.getElementById('btn-demo-barcode');
+    if (demoBtn) {
+      demoBtn.addEventListener('click', () => {
+        const match = this.products.find(p => p.barcode === '8801001' || p.id === 'PROD_BURGER');
+        if (match) {
+          this.addProductToOrder(match);
+          showToast(`Simulated Barcode Scan: ${match.name}`, 'success');
+        } else if (this.products.length > 0) {
+          this.addProductToOrder(this.products[0]);
+          showToast(`Simulated Barcode Scan: ${this.products[0].name}`, 'success');
+        }
+      });
+    }
+  }
+
+  switchOrderTab(idx) {
+    this.activeOrderIndex = idx;
+    this.selectedLineIndex = this.orders[idx].lines.length - 1;
+    this.renderAll();
+  }
+
+  createNewOrder() {
+    const id = this.orders.length + 1;
+    this.orders.push({
+      id: id,
+      name: `Order ${id}`,
+      tableId: `T${id}`,
+      lines: [],
+      customer: this.customers[2],
+      paymentMethod: "Cash",
+      tenderedAmount: 0
+    });
+    this.activeOrderIndex = this.orders.length - 1;
+    this.renderAll();
+  }
+
+  selectLine(idx) {
+    this.selectedLineIndex = idx;
+    this.numpadBuffer = "";
+    this.renderCart();
   }
 }

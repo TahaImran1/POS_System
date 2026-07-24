@@ -52,6 +52,14 @@ class SoundManager {
     }
   }
 
+  playAdd() {
+    this.playBeep();
+  }
+
+  playKeypad() {
+    this.playClick();
+  }
+
   // Soft tactile click for keypad
   playClick() {
     if (!this.enabled) return;

@@ -1,0 +1,29 @@
+{
+  "name": "pos_system",
+  "version": "1.0.0",
+  "description": "Enterprise Universal Multi-Branch Point of Sale System",
+  "main": "src/main.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "npx serve -l 5173",
+    "seed": "npx tsx src/db/seed.ts",
+    "server": "npx tsx server/src/index.ts"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.2",
+    "@fastify/websocket": "^11.0.2",
+    "better-sqlite3": "^11.8.1",
+    "dotenv": "^16.4.7",
+    "drizzle-orm": "^0.38.4",
+    "fastify": "^5.2.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.10",
+    "@types/ws": "^8.5.14",
+    "drizzle-kit": "^0.30.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

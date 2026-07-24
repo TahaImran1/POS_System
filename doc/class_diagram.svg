@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: bold; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      
+      .class-card { fill: #1e293b; stroke: #3b82f6; stroke-width: 1.5; rx: 8; }
+      .class-header { fill: #334155; rx: 8; }
+      .class-name { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: bold; fill: #60a5fa; text-anchor: middle; }
+      .class-stereo { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #94a3b8; text-anchor: middle; font-style: italic; }
+      .member-text { font-family: monospace; font-size: 11px; fill: #e2e8f0; }
+      
+      .line { stroke: #64748b; stroke-width: 1.5; }
+      .dash-line { stroke: #a855f7; stroke-width: 1.5; stroke-dasharray: 4 4; }
+    </style>
+  </defs>
+
+  <rect width="100%" height="100%" class="bg" rx="12"/>
+
+  <!-- Title -->
+  <text x="30" y="35" class="title">Enterprise POS Software Architecture - Class Diagram</text>
+  <text x="30" y="55" class="subtitle">Services: BOM Recipe Auto-Deduction, Tax Engine, Session Manager, Pricelists &amp; DB Adapters</text>
+
+  <!-- POSController -->
+  <g transform="translate(420, 80)">
+    <rect width="260" height="120" class="class-card"/>
+    <rect width="260" height="30" class="class-header"/>
+    <text x="130" y="20" class="class-name">POSController</text>
+    <text x="10" y="48" class="member-text">- SalesService salesService</text>
+    <text x="10" y="66" class="member-text">- BOMService bomService</text>
+    <text x="10" y="84" class="member-text">- TaxEngine | SessionManager</text>
+    <text x="10" y="102" class="member-text">+ addToCart() | + checkout()</text>
+  </g>
+
+  <!-- BOMService -->
+  <g transform="translate(30, 240)">
+    <rect width="240" height="130" class="class-card"/>
+    <rect width="240" height="30" class="class-header"/>
+    <text x="120" y="20" class="class-name">BOMService (Recipe)</text>
+    <text x="10" y="48" class="member-text">- IDatabase db</text>
+    <text x="10" y="68" class="member-text">+ getBOMForProduct(id)</text>
+    <text x="10" y="88" class="member-text">+ deductRecipeIngredients()</text>
+    <text x="10" y="108" class="member-text">+ checkAvailability()</text>
+  </g>
+
+  <!-- TaxEngine -->
+  <g transform="translate(290, 240)">
+    <rect width="240" height="130" class="class-card"/>
+    <rect width="240" height="30" class="class-header"/>
+    <text x="120" y="20" class="class-name">TaxEngine</text>
+    <text x="10" y="48" class="member-text">- IDatabase db</text>
+    <text x="10" y="68" class="member-text">+ calculateItemTax()</text>
+    <text x="10" y="88" class="member-text">+ calculateCartTaxes()</text>
+    <text x="10" y="108" class="member-text">+ getBranchTaxGroup()</text>
+  </g>
+
+  <!-- SessionManager -->
+  <g transform="translate(550, 240)">
+    <rect width="250" height="130" class="class-card"/>
+    <rect width="250" height="30" class="class-header"/>
+    <text x="125" y="20" class="class-name">SessionManager (Auditing)</text>
+    <text x="10" y="48" class="member-text">- IDatabase db</text>
+    <text x="10" y="68" class="member-text">+ openSession(pin, float)</text>
+    <text x="10" y="88" class="member-text">+ logCashDrop(type, amt)</text>
+    <text x="10" y="108" class="member-text">+ closeSessionWithCount() [Z-Report]</text>
+  </g>
+
+  <!-- PricelistService -->
+  <g transform="translate(820, 240)">
+    <rect width="250" height="130" class="class-card"/>
+    <rect width="250" height="30" class="class-header"/>
+    <text x="125" y="20" class="class-name">PricelistService</text>
+    <text x="10" y="48" class="member-text">- IDatabase db</text>
+    <text x="10" y="68" class="member-text">+ getItemPrice(prod, customer)</text>
+    <text x="10" y="88" class="member-text">+ applyPromotions(cart)</text>
+    <text x="10" y="108" class="member-text">+ validateCreditLimit()</text>
+  </g>
+
+  <!-- IDatabase Interface -->
+  <g transform="translate(420, 420)">
+    <rect width="260" height="110" class="class-card" style="stroke: #a855f7;"/>
+    <rect width="260" height="35" class="class-header" style="fill: #4c1d95;"/>
+    <text x="130" y="15" class="class-stereo">&lt;&lt;interface&gt;&gt;</text>
+    <text x="130" y="28" class="class-name" style="fill: #c084fc;">IDatabase</text>
+    <text x="10" y="52" class="member-text">+ query(sql, params)</text>
+    <text x="10" y="70" class="member-text">+ execute(sql, params)</text>
+    <text x="10" y="88" class="member-text">+ insertEvent(table, delta)</text>
+  </g>
+
+  <!-- SQLiteAdapter -->
+  <g transform="translate(260, 560)">
+    <rect width="250" height="90" class="class-card"/>
+    <rect width="250" height="28" class="class-header"/>
+    <text x="125" y="18" class="class-name">SQLiteAdapter (Edge POS)</text>
+    <text x="10" y="45" class="member-text">- WASM / OPFS sqlite Connection</text>
+    <text x="10" y="65" class="member-text">+ query() | + execute() | + insertEvent()</text>
+  </g>
+
+  <!-- PostgresAdapter -->
+  <g transform="translate(570, 560)">
+    <rect width="250" height="90" class="class-card"/>
+    <rect width="250" height="28" class="class-header"/>
+    <text x="125" y="18" class="class-name">PostgresAdapter (Server)</text>
+    <text x="10" y="45" class="member-text">- Pool Connection (PostgreSQL)</text>
+    <text x="10" y="65" class="member-text">+ query() | + execute() | + insertEvent()</text>
+  </g>
+
+  <!-- Lines -->
+  <line x1="550" y1="200" x2="150" y2="240" class="line"/>
+  <line x1="550" y1="200" x2="410" y2="240" class="line"/>
+  <line x1="550" y1="200" x2="675" y2="240" class="line"/>
+  <line x1="550" y1="200" x2="945" y2="240" class="line"/>
+
+  <line x1="150" y1="370" x2="430" y2="420" class="line"/>
+  <line x1="410" y1="370" x2="480" y2="420" class="line"/>
+  <line x1="675" y1="370" x2="600" y2="420" class="line"/>
+  <line x1="945" y1="370" x2="670" y2="420" class="line"/>
+
+  <line x1="385" y1="560" x2="460" y2="530" class="dash-line"/>
+  <line x1="695" y1="560" x2="620" y2="530" class="dash-line"/>
+</svg>

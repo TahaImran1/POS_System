@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 700" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: bold; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      
+      .table-card { fill: #1e293b; stroke: #0284c7; stroke-width: 1.5; rx: 8; }
+      .table-header { fill: #0369a1; rx: 8; }
+      .table-header-green { fill: #047857; rx: 8; }
+      .table-header-amber { fill: #b45309; rx: 8; }
+      .table-header-purple { fill: #6b21a8; rx: 8; }
+      
+      .table-name { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: bold; fill: #ffffff; text-anchor: middle; }
+      .field-text { font-family: monospace; font-size: 11px; fill: #e2e8f0; }
+      .pk { fill: #f59e0b; font-weight: bold; }
+      .fk { fill: #38bdf8; font-weight: bold; }
+      .json-attr { fill: #c084fc; font-weight: bold; }
+      .line { stroke: #64748b; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="100%" height="100%" class="bg" rx="12"/>
+
+  <text x="30" y="35" class="title">Enterprise Multi-Vertical Relational Schema (Postgres &amp; SQLite)</text>
+  <text x="30" y="55" class="subtitle">Supports Recipe BOM Auto-Deduction, Multi-Tax Engine, Cash Sessions, Pricelists &amp; Event Sourcing</text>
+
+  <!-- NODES -->
+  <g transform="translate(30, 80)">
+    <rect width="220" height="135" class="table-card"/>
+    <rect width="220" height="28" class="table-header"/>
+    <text x="110" y="19" class="table-name">NODES (Hierarchy)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> node_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> parent_node_id : UUID</text>
+    <text x="10" y="81" class="field-text">node_type : VARCHAR</text>
+    <text x="10" y="99" class="field-text">location_name : VARCHAR</text>
+    <text x="10" y="117" class="field-text">created_at : TIMESTAMP</text>
+  </g>
+
+  <!-- PRODUCTS -->
+  <g transform="translate(280, 80)">
+    <rect width="250" height="135" class="table-card"/>
+    <rect width="250" height="28" class="table-header"/>
+    <text x="125" y="19" class="table-name">PRODUCTS</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> product_id : UUID</text>
+    <text x="10" y="63" class="field-text">barcode : VARCHAR (UK)</text>
+    <text x="10" y="81" class="field-text">type : FINISHED|RAW|SVC</text>
+    <text x="10" y="99" class="field-text">default_price : DECIMAL</text>
+    <text x="10" y="117" class="field-text">uom : PCS|KG|LTR|G</text>
+  </g>
+
+  <!-- PRODUCT_BOM -->
+  <g transform="translate(560, 80)">
+    <rect width="250" height="135" class="table-card" style="stroke: #10b981;"/>
+    <rect width="250" height="28" class="table-header-green"/>
+    <text x="125" y="19" class="table-name">PRODUCT_BOM (Recipes)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> bom_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> parent_product_id : UUID</text>
+    <text x="10" y="81" class="field-text"><tspan class="fk">FK</tspan> ingredient_product_id : UUID</text>
+    <text x="10" y="99" class="field-text">quantity_required : DECIMAL</text>
+    <text x="10" y="117" class="field-text">uom : VARCHAR</text>
+  </g>
+
+  <!-- TAX_GROUPS -->
+  <g transform="translate(840, 80)">
+    <rect width="230" height="135" class="table-card"/>
+    <rect width="230" height="28" class="table-header"/>
+    <text x="115" y="19" class="table-name">TAX_GROUPS (Multi-Tax)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> tax_group_id : UUID</text>
+    <text x="10" y="63" class="field-text">name : GST|VAT|Municipal</text>
+    <text x="10" y="81" class="field-text">rate_percentage : DECIMAL</text>
+    <text x="10" y="99" class="field-text">is_inclusive : BOOLEAN</text>
+  </g>
+
+  <!-- CASH_SESSIONS -->
+  <g transform="translate(30, 250)">
+    <rect width="240" height="150" class="table-card" style="stroke: #a855f7;"/>
+    <rect width="240" height="28" class="table-header-purple"/>
+    <text x="120" y="19" class="table-name">CASH_SESSIONS (Auditing)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> session_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> node_id | cashier_user_id</text>
+    <text x="10" y="81" class="field-text">opening_balance : DECIMAL</text>
+    <text x="10" y="99" class="field-text">closing_cash_counted : DECIMAL</text>
+    <text x="10" y="117" class="field-text">cash_variance : DECIMAL</text>
+    <text x="10" y="135" class="field-text">status : OPEN | CLOSED (Z-Report)</text>
+  </g>
+
+  <!-- INVENTORY -->
+  <g transform="translate(290, 250)">
+    <rect width="240" height="150" class="table-card"/>
+    <rect width="240" height="28" class="table-header"/>
+    <text x="120" y="19" class="table-name">INVENTORY (Stock)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> inventory_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> node_id : UUID</text>
+    <text x="10" y="81" class="field-text"><tspan class="fk">FK</tspan> product_id : UUID</text>
+    <text x="10" y="99" class="field-text">quantity : DECIMAL (Auto-Deduct)</text>
+    <text x="10" y="117" class="field-text">min_stock_alert : DECIMAL</text>
+    <text x="10" y="135" class="field-text">last_updated : TIMESTAMP</text>
+  </g>
+
+  <!-- PRICELISTS -->
+  <g transform="translate(550, 250)">
+    <rect width="240" height="150" class="table-card"/>
+    <rect width="240" height="28" class="table-header"/>
+    <text x="120" y="19" class="table-name">PRICELISTS &amp; TIERS</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> pricelist_id : UUID</text>
+    <text x="10" y="63" class="field-text">name : Retail|VIP|Wholesale</text>
+    <text x="10" y="81" class="field-text">currency : VARCHAR</text>
+    <text x="10" y="99" class="field-text">branch_override : BOOLEAN</text>
+  </g>
+
+  <!-- CUSTOMERS -->
+  <g transform="translate(810, 250)">
+    <rect width="260" height="150" class="table-card"/>
+    <rect width="260" height="28" class="table-header"/>
+    <text x="130" y="19" class="table-name">CUSTOMERS &amp; CREDIT</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> customer_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> pricelist_id : UUID</text>
+    <text x="10" y="81" class="field-text">credit_limit : DECIMAL</text>
+    <text x="10" y="99" class="field-text">current_balance : DECIMAL</text>
+  </g>
+
+  <!-- SALES -->
+  <g transform="translate(100, 440)">
+    <rect width="280" height="160" class="table-card"/>
+    <rect width="280" height="28" class="table-header"/>
+    <text x="140" y="19" class="table-name">SALES (Header)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> sale_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> node_id | session_id | customer_id</text>
+    <text x="10" y="81" class="field-text">subtotal | tax_total | discount_total</text>
+    <text x="10" y="99" class="field-text">net_total : DECIMAL</text>
+    <text x="10" y="117" class="field-text">payment_method : CASH|CARD|CREDIT</text>
+    <text x="10" y="135" class="field-text"><tspan class="json-attr">JSON</tspan> extra_attributes (KDS, Table)</text>
+  </g>
+
+  <!-- SALE_ITEMS -->
+  <g transform="translate(410, 440)">
+    <rect width="280" height="160" class="table-card"/>
+    <rect width="280" height="28" class="table-header"/>
+    <text x="140" y="19" class="table-name">SALE_ITEMS (Line Items)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> sale_item_id : UUID</text>
+    <text x="10" y="63" class="field-text"><tspan class="fk">FK</tspan> sale_id | product_id</text>
+    <text x="10" y="81" class="field-text">quantity : DECIMAL</text>
+    <text x="10" y="99" class="field-text">unit_price | tax_amount | line_total</text>
+    <text x="10" y="117" class="field-text"><tspan class="json-attr">JSON</tspan> modifiers (Flavors/Toppings)</text>
+  </g>
+
+  <!-- SYNC_EVENTS -->
+  <g transform="translate(720, 440)">
+    <rect width="350" height="160" class="table-card" style="stroke: #f59e0b;"/>
+    <rect width="350" height="28" class="table-header-amber"/>
+    <text x="175" y="19" class="table-name">SYNC_EVENTS (Event Sync Engine)</text>
+    <text x="10" y="45" class="field-text"><tspan class="pk">PK</tspan> event_id : UUID | <tspan class="fk">FK</tspan> origin_node_id</text>
+    <text x="10" y="63" class="field-text">table_name : VARCHAR</text>
+    <text x="10" y="81" class="field-text">action : INSERT | UPDATE | DELETE</text>
+    <text x="10" y="99" class="field-text"><tspan class="json-attr">JSON</tspan> payload (Delta e.g. BOM ingredient deduction)</text>
+    <text x="10" y="117" class="field-text">is_synced : BOOLEAN | created_at : TIMESTAMP</text>
+  </g>
+
+  <!-- Connecting Lines -->
+  <line x1="530" y1="140" x2="560" y2="140" class="line"/>
+  <line x1="150" y1="215" x2="150" y2="250" class="line"/>
+  <line x1="410" y1="215" x2="410" y2="250" class="line"/>
+  <line x1="380" y1="520" x2="410" y2="520" class="line"/>
+</svg>

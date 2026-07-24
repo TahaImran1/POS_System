@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="100%" height="100%">
+  <defs>
+    <style>
+      .bg { fill: #0f172a; }
+      .title { font-family: system-ui, -apple-system, sans-serif; font-size: 20px; font-weight: bold; fill: #f8fafc; }
+      .subtitle { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; fill: #94a3b8; }
+      
+      .actor-box { fill: #1e293b; stroke: #3b82f6; stroke-width: 2; rx: 8; }
+      .actor-title { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: bold; fill: #60a5fa; text-anchor: middle; }
+      .actor-sub { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; fill: #cbd5e1; text-anchor: middle; }
+      
+      .pkg { fill: #1e293b; stroke: #334155; stroke-width: 1.5; stroke-dasharray: 4 4; rx: 10; }
+      .pkg-title { font-family: system-ui, -apple-system, sans-serif; font-size: 13px; font-weight: bold; fill: #f1f5f9; }
+      
+      .usecase { fill: #0f172a; stroke: #8b5cf6; stroke-width: 1.5; }
+      .usecase-green { fill: #0f172a; stroke: #10b981; stroke-width: 1.5; }
+      .usecase-amber { fill: #0f172a; stroke: #f59e0b; stroke-width: 1.5; }
+      .usecase-text { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 600; fill: #e2e8f0; text-anchor: middle; dominant-baseline: middle; }
+      
+      .line { stroke: #64748b; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="100%" height="100%" class="bg" rx="12"/>
+
+  <!-- Title -->
+  <text x="30" y="35" class="title">Enterprise POS System - Use Case Diagram</text>
+  <text x="30" y="55" class="subtitle">Actors &amp; Operations: Sessions (Z-Report), Recipe BOM Auto-Deduction, Multi-Tax &amp; Pricelists</text>
+
+  <!-- Actors Column -->
+  <g transform="translate(30, 85)">
+    <!-- Cashier -->
+    <rect x="0" y="20" width="170" height="65" class="actor-box"/>
+    <text x="85" y="48" class="actor-title">👤 Cashier / User</text>
+    <text x="85" y="65" class="actor-sub">Terminal Operator</text>
+
+    <!-- Store Supervisor -->
+    <rect x="0" y="190" width="170" height="65" class="actor-box"/>
+    <text x="85" y="218" class="actor-title">👤 Store Supervisor</text>
+    <text x="85" y="235" class="actor-sub">Shift Manager</text>
+
+    <!-- Root Admin -->
+    <rect x="0" y="360" width="170" height="65" class="actor-box"/>
+    <text x="85" y="388" class="actor-title">👤 Global / Root Admin</text>
+    <text x="85" y="405" class="actor-sub">Enterprise System Admin</text>
+  </g>
+
+  <!-- Package 1: Terminal Ops -->
+  <g transform="translate(240, 85)">
+    <rect x="0" y="0" width="230" height="470" class="pkg"/>
+    <text x="15" y="25" class="pkg-title">💻 POS Terminal Operations</text>
+
+    <ellipse cx="115" cy="70" rx="95" ry="22" class="usecase-amber"/>
+    <text x="115" y="70" class="usecase-text">Open Session &amp; Float</text>
+
+    <ellipse cx="115" cy="150" rx="95" ry="24" class="usecase-green"/>
+    <text x="115" y="142" class="usecase-text">Process Sale &amp; Auto-Deduct</text>
+    <text x="115" y="158" class="usecase-text">BOM Raw Ingredients</text>
+
+    <ellipse cx="115" cy="240" rx="95" ry="24" class="usecase"/>
+    <text x="115" y="232" class="usecase-text">Apply Multi-Tax &amp;</text>
+    <text x="115" y="248" class="usecase-text">Branch Pricelists</text>
+
+    <ellipse cx="115" cy="330" rx="95" ry="22" class="usecase"/>
+    <text x="115" y="330" class="usecase-text">Log Mid-Shift Cash Drop</text>
+
+    <ellipse cx="115" cy="415" rx="95" ry="24" class="usecase-amber"/>
+    <text x="115" y="407" class="usecase-text">Blind Count &amp; Close Session</text>
+    <text x="115" y="423" class="usecase-text">(Z-Report Summary)</text>
+  </g>
+
+  <!-- Package 2: Manager Ops -->
+  <g transform="translate(500, 85)">
+    <rect x="0" y="0" width="220" height="470" class="pkg"/>
+    <text x="15" y="25" class="pkg-title">🛡️ Supervisor / Manager</text>
+
+    <ellipse cx="110" cy="130" rx="90" ry="25" class="usecase-amber"/>
+    <text x="110" y="122" class="usecase-text">Authorize Line Void /</text>
+    <text x="110" y="138" class="usecase-text">Price Override (PIN)</text>
+
+    <ellipse cx="110" cy="250" rx="90" ry="25" class="usecase-green"/>
+    <text x="110" y="242" class="usecase-text">Manage Recipe / BOM</text>
+    <text x="110" y="258" class="usecase-text">Ingredient Ratios</text>
+
+    <ellipse cx="110" cy="370" rx="90" ry="25" class="usecase"/>
+    <text x="110" y="362" class="usecase-text">Log Inventory Waste &amp;</text>
+    <text x="110" y="378" class="usecase-text">Raw Adjustments</text>
+  </g>
+
+  <!-- Package 3: Central Admin -->
+  <g transform="translate(750, 85)">
+    <rect width="220" height="470" class="pkg"/>
+    <text x="15" y="25" class="pkg-title">🗄️ Central Enterprise</text>
+
+    <ellipse cx="110" cy="130" rx="90" ry="25" class="usecase"/>
+    <text x="110" y="122" class="usecase-text">Configure Tax Groups &amp;</text>
+    <text x="110" y="138" class="usecase-text">Branch Pricelists</text>
+
+    <ellipse cx="110" cy="250" rx="90" ry="25" class="usecase"/>
+    <text x="110" y="242" class="usecase-text">View Consolidated</text>
+    <text x="110" y="258" class="usecase-text">Financial Reports</text>
+
+    <ellipse cx="110" cy="370" rx="90" ry="25" class="usecase"/>
+    <text x="110" y="362" class="usecase-text">Monitor Distributed</text>
+    <text x="110" y="378" class="usecase-text">Node Hierarchy</text>
+  </g>
+
+  <!-- Relationships -->
+  <line x1="200" y1="120" x2="260" y2="155" class="line"/>
+  <line x1="200" y1="120" x2="260" y2="235" class="line"/>
+  <line x1="200" y1="120" x2="260" y2="330" class="line"/>
+  <line x1="200" y1="120" x2="260" y2="415" class="line"/>
+
+  <line x1="200" y1="285" x2="520" y2="155" class="line"/>
+  <line x1="200" y1="285" x2="520" y2="275" class="line"/>
+  <line x1="200" y1="285" x2="520" y2="395" class="line"/>
+
+  <line x1="200" y1="450" x2="770" y2="155" class="line"/>
+  <line x1="200" y1="450" x2="770" y2="275" class="line"/>
+  <line x1="200" y1="450" x2="770" y2="395" class="line"/>
+</svg>

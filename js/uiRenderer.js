@@ -1,5 +1,5 @@
 // ============================================================================
-// ODOO POS DOM UI RENDERER
+// ENTERPRISE POS DOM UI RENDERER & THERMAL RECEIPT GENERATOR
 // ============================================================================
 
 export function formatCurrency(amount) {
@@ -9,6 +9,41 @@ export function formatCurrency(amount) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   }).format(amount || 0);
+}
+
+export function showToast(message, type = 'info') {
+  let toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    toastContainer.style.cssText = `
+      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+    `;
+    document.body.appendChild(toastContainer);
+  }
+
+  const toast = document.createElement('div');
+  const bgColor = type === 'success' ? '#10b981' : type === 'warning' ? '#f59e0b' : '#3b82f6';
+  toast.style.cssText = `
+    background: ${bgColor}; color: white; padding: 12px 18px; border-radius: 8px;
+    font-family: system-ui, sans-serif; font-size: 13px; font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; transform: translateY(10px);
+    transition: all 0.25s ease; pointer-events: auto;
+  `;
+  toast.innerText = message;
+  toastContainer.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+  });
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    setTimeout(() => toast.remove(), 250);
+  }, 3000);
 }
 
 // Render Topbar Order Tabs
@@ -32,10 +67,9 @@ export function renderOrderTabs(orders, activeIndex, onSelectTab, onNewOrder) {
     container.appendChild(tab);
   });
 
-  // New Order '+' button
   const newBtn = document.createElement('button');
   newBtn.className = 'new-order-tab-btn';
-  newBtn.title = 'New Concurrent Order (Hold/Switch)';
+  newBtn.title = 'New Order Tab';
   newBtn.innerHTML = '<i class="fas fa-plus"></i>';
   newBtn.addEventListener('click', onNewOrder);
   container.appendChild(newBtn);
@@ -57,14 +91,14 @@ export function renderCustomerBar(customer, onOpenModal) {
   } else {
     const initials = customer.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
     btn.innerHTML = `
-      <div class="customer-info-badge">
-        <div class="customer-avatar">${initials}</div>
-        <div>
-          <div style="font-weight:600; line-height:1.1;">${customer.name}</div>
-          <div style="font-size:11px; color:var(--text-muted);">${customer.tier || 'Regular'}</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:32px; height:32px; border-radius:50%; background:#8b5cf6; color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:12px;">${initials}</div>
+        <div style="text-align:left;">
+          <div style="font-weight:600; font-size:13px; line-height:1.1;">${customer.name}</div>
+          <div style="font-size:11px; color:#6b7280;">${customer.tier || 'Regular'} (${formatCurrency(customer.currentBalance)} Credit)</div>
         </div>
       </div>
-      <div class="customer-loyalty-pill">
+      <div style="background:#f3e8ff; color:#7e22ce; padding:3px 8px; border-radius:12px; font-size:11px; font-weight:600;">
         <i class="fas fa-award"></i> ${customer.loyaltyPoints || 0} pts
       </div>
     `;
@@ -73,7 +107,7 @@ export function renderCustomerBar(customer, onOpenModal) {
   btn.onclick = onOpenModal;
 }
 
-// Render Category Filter Chips
+// Render Category Chips
 export function renderCategoryChips(categories, activeCategoryId, onSelectCategory) {
   const container = document.getElementById('category-chips-bar');
   if (!container) return;
@@ -99,50 +133,32 @@ export function renderProductGrid(products, onSelectProduct) {
 
   grid.innerHTML = '';
 
-  if (products.length === 0) {
-    grid.innerHTML = `
-      <div style="grid-column: 1 / -1; text-align:center; padding: 60px 20px; color: var(--text-muted);">
-        <i class="fas fa-search" style="font-size: 38px; opacity:0.4; margin-bottom:12px;"></i>
-        <p style="font-size: 15px; font-weight: 500;">No products match your search or category filter.</p>
-      </div>
-    `;
-    return;
-  }
-
   products.forEach(product => {
     const card = document.createElement('div');
     card.className = 'product-card';
     card.setAttribute('data-id', product.id);
 
+    const hasBOM = product.bom && product.bom.length > 0;
+
     card.innerHTML = `
-      <div class="product-image-box">
-        <img src="${product.image}" alt="${product.name}" />
-        <span class="product-sku-badge">${product.barcode}</span>
-        <span class="product-price-pill">${formatCurrency(product.price)}</span>
+      <div class="product-img-wrapper">
+        <img src="${product.image}" alt="${product.name}" loading="lazy">
+        <span class="product-price-tag">${formatCurrency(product.price)}</span>
+        ${hasBOM ? `<span style="position:absolute; top:6px; left:6px; background:#10b981; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">BOM RECIPE</span>` : ''}
       </div>
-      <div class="product-info-box">
-        <div class="product-card-title">${product.name}</div>
-        <div class="product-card-meta">
-          <span>${product.stock > 10 ? 'In Stock' : `${product.stock} left`}</span>
-          <span>VAT 10%</span>
-        </div>
+      <div class="product-info">
+        <div class="product-name">${product.name}</div>
+        <div style="font-size:11px; color:#6b7280; margin-top:2px;">SKU: ${product.sku}</div>
       </div>
     `;
 
-    card.addEventListener('click', () => {
-      // micro animation
-      card.classList.remove('animate-click');
-      void card.offsetWidth; // trigger reflow
-      card.classList.add('animate-click');
-      onSelectProduct(product);
-    });
-
+    card.addEventListener('click', () => onSelectProduct(product));
     grid.appendChild(card);
   });
 }
 
-// Render Order Lines
-export function renderOrderLines(order, selectedLineIndex, onSelectLine) {
+// Render Order Ticket Lines
+export function renderOrderLines(order, selectedIndex, onSelectLine) {
   const container = document.getElementById('order-lines-container');
   if (!container) return;
 
@@ -152,212 +168,198 @@ export function renderOrderLines(order, selectedLineIndex, onSelectLine) {
     container.innerHTML = `
       <div class="empty-cart-state">
         <i class="fas fa-shopping-basket"></i>
-        <p>Order is empty</p>
-        <span style="font-size:12px; margin-top:4px;">Select products from catalog or scan barcode</span>
+        <div style="font-weight:600; color:var(--text-muted);">Cart is empty</div>
+        <div style="font-size:12px; color:var(--text-light); margin-top:4px;">Scan barcode or select items from catalog</div>
       </div>
     `;
     return;
   }
 
-  order.lines.forEach((line, index) => {
-    const el = document.createElement('div');
-    el.className = `order-line ${index === selectedLineIndex ? 'selected' : ''}`;
+  order.lines.forEach((line, idx) => {
+    const isSelected = idx === selectedIndex;
+    const lineTotal = line.unitPrice * line.quantity * (1 - line.discountPerc / 100);
 
-    const subtotal = line.price * line.quantity * (1 - (line.discount || 0) / 100);
+    const row = document.createElement('div');
+    row.className = `order-line ${isSelected ? 'selected' : ''}`;
 
-    el.innerHTML = `
+    const numpadMode = window.posApp?.numpadMode || 'qty';
+    const numpadBuffer = window.posApp?.numpadBuffer || '';
+
+    const isQtyActive = isSelected && numpadMode === 'qty';
+    const isPriceActive = isSelected && numpadMode === 'price';
+    const isDiscActive = isSelected && numpadMode === 'disc';
+
+    row.innerHTML = `
       <div class="order-line-header">
         <span class="order-line-title">${line.product.name}</span>
-        <span class="order-line-subtotal">${formatCurrency(subtotal)}</span>
+        <span class="order-line-subtotal line-total-display">${formatCurrency(lineTotal)}</span>
       </div>
+
       <div class="order-line-details">
         <div class="line-qty-unit">
-          <span style="font-weight:600; color:var(--text-main);">${line.quantity} Unit(s)</span>
-          <span>x ${formatCurrency(line.price)}</span>
+          <span style="font-weight:${isQtyActive ? '700' : '500'}; color:${isQtyActive ? 'var(--odoo-teal)' : 'inherit'};">
+            ${line.quantity} Units
+          </span>
+          <span style="font-weight:${isPriceActive ? '700' : '400'}; color:${isPriceActive ? 'var(--odoo-teal)' : 'inherit'};">
+            x ${formatCurrency(line.unitPrice)}
+          </span>
+          ${line.discountPerc > 0 ? `<span class="line-discount-pill">-${line.discountPerc}%</span>` : ''}
+          ${isSelected && numpadBuffer ? `<span style="background:var(--odoo-teal); color:#fff; padding:1px 7px; border-radius:4px; font-size:10px; font-weight:700; font-family:var(--font-mono);">Typing: ${numpadBuffer}</span>` : ''}
         </div>
-        <div>
-          ${line.discount > 0 ? `<span class="line-discount-pill">-${line.discount}% Disc</span>` : ''}
-        </div>
+
+        <button class="btn-line-delete" style="border:none; background:transparent; color:#ef4444; cursor:pointer; opacity:${isSelected ? 1 : 0.4}; font-size:12px;" title="Remove Line" onclick="event.stopPropagation()">
+          <i class="fas fa-trash-alt"></i>
+        </button>
       </div>
-      ${line.note ? `<div class="line-note"><i class="fas fa-comment-alt"></i> "${line.note}"</div>` : ''}
+      ${line.product.bom ? `<div class="line-note"><i class="fas fa-cubes"></i> Recipe BOM Auto-Deducts</div>` : ''}
     `;
 
-    el.addEventListener('click', () => onSelectLine(index));
-    container.appendChild(el);
-  });
+    row.addEventListener('click', () => onSelectLine(idx));
 
-  // Auto scroll to bottom / selected
-  container.scrollTop = container.scrollHeight;
+    const deleteBtn = row.querySelector('.btn-line-delete');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        order.lines.splice(idx, 1);
+        if (window.posApp) {
+          window.posApp.selectedLineIndex = Math.max(-1, order.lines.length - 1);
+          window.posApp.renderCart();
+        }
+      });
+    }
+
+    container.appendChild(row);
+  });
 }
 
-// Render Order Summary Footer & Huge Pay Button
+// Render Order Summary Footer
 export function renderOrderSummary(order) {
   const subtotalEl = document.getElementById('summary-subtotal');
   const taxesEl = document.getElementById('summary-taxes');
   const totalEl = document.getElementById('summary-total');
-  const payBtnBadge = document.getElementById('pay-btn-total-badge');
+  const payBadgeEl = document.getElementById('pay-btn-total-badge');
 
   if (!order) return;
 
   let subtotal = 0;
+  let taxTotal = 0;
+
   order.lines.forEach(line => {
-    subtotal += line.price * line.quantity * (1 - (line.discount || 0) / 100);
+    const lineNet = line.unitPrice * line.quantity * (1 - line.discountPerc / 100);
+    const base = lineNet / 1.10;
+    const tax = lineNet - base;
+    subtotal += base;
+    taxTotal += tax;
   });
 
-  const taxes = subtotal * 0.10; // 10% VAT
-  const total = subtotal + taxes;
+  const grandTotal = subtotal + taxTotal;
 
-  if (subtotalEl) subtotalEl.textContent = formatCurrency(subtotal);
-  if (taxesEl) taxesEl.textContent = formatCurrency(taxes);
-  if (totalEl) totalEl.textContent = formatCurrency(total);
-  if (payBtnBadge) payBtnBadge.textContent = formatCurrency(total);
+  if (subtotalEl) subtotalEl.innerText = formatCurrency(subtotal);
+  if (taxesEl) taxesEl.innerText = formatCurrency(taxTotal);
+  if (totalEl) totalEl.innerText = formatCurrency(grandTotal);
+  if (payBadgeEl) payBadgeEl.innerText = formatCurrency(grandTotal);
 }
 
-// Render Customer Modal List
-export function renderCustomerModalList(customers, activeCustomer, onSelectCustomer) {
-  const grid = document.getElementById('customer-modal-grid');
-  if (!grid) return;
-
-  grid.innerHTML = '';
-
-  customers.forEach(cust => {
-    const card = document.createElement('div');
-    card.className = 'customer-card-item';
-
-    const isSelected = activeCustomer && activeCustomer.id === cust.id;
-
-    card.innerHTML = `
-      <div>
-        <div style="font-weight:600; font-size:14.5px; color:var(--text-main);">
-          ${cust.name}
-          ${isSelected ? `<span style="background:var(--odoo-teal); color:#fff; font-size:11px; padding:2px 6px; border-radius:4px; margin-left:6px;">Selected</span>` : ''}
-        </div>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-          <i class="fas fa-map-marker-alt" style="width:14px;"></i> ${cust.address} | ${cust.phone}
-        </div>
-      </div>
-      <div style="text-align:right;">
-        <span class="customer-loyalty-pill">${cust.loyaltyPoints || 0} pts</span>
-        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">${cust.tier}</div>
-      </div>
-    `;
-
-    card.addEventListener('click', () => onSelectCustomer(cust));
-    grid.appendChild(card);
-  });
-}
-
-// Render Thermal Receipt
-export function renderThermalReceipt(order, storeInfo) {
-  const container = document.getElementById('thermal-receipt-content');
-  if (!container || !order) return;
+// Render Customer Receipt
+export function renderThermalReceipt(order, paymentMethod, tenderedAmount, storeInfo) {
+  let modal = document.getElementById('modal-receipt');
+  if (!modal) return;
 
   let subtotal = 0;
-  order.lines.forEach(line => {
-    subtotal += line.price * line.quantity * (1 - (line.discount || 0) / 100);
-  });
+  let taxTotal = 0;
 
-  const taxes = subtotal * storeInfo.taxRate;
-  const total = subtotal + taxes;
-  const tendered = order.tenderedAmount || total;
-  const change = Math.max(0, tendered - total);
-  const now = new Date();
+  let itemsHtml = order.lines.map(line => {
+    const lineTotal = line.unitPrice * line.quantity * (1 - line.discountPerc / 100);
+    const base = lineTotal / 1.10;
+    subtotal += base;
+    taxTotal += (lineTotal - base);
 
-  container.innerHTML = `
-    <div class="receipt-header-text">
-      <div class="receipt-store-title">${storeInfo.storeName}</div>
-      <div>${storeInfo.companyName}</div>
-      <div>${storeInfo.address}</div>
-      <div>Tel: ${storeInfo.phone}</div>
-      <div style="margin-top:6px; font-weight:600;">VAT: ${storeInfo.taxId}</div>
-    </div>
-
-    <div class="receipt-divider"></div>
-
-    <div style="display:flex; justify-content:space-between; font-size:11.5px;">
-      <span>Order: <b>${order.name}</b></span>
-      <span>Ref: ${storeInfo.sessionName}</span>
-    </div>
-    <div style="display:flex; justify-content:space-between; font-size:11.5px; margin-top:2px;">
-      <span>Cashier: ${storeInfo.cashier}</span>
-      <span>${now.toLocaleDateString()} ${now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-    </div>
-    ${order.customer ? `<div style="font-size:11.5px; margin-top:2px;">Customer: <b>${order.customer.name}</b> (${order.customer.loyaltyPoints} pts)</div>` : ''}
-
-    <div class="receipt-divider"></div>
-
-    <div style="margin-bottom:8px;">
-      ${order.lines.map(line => {
-        const itemSubtotal = line.price * line.quantity * (1 - (line.discount || 0) / 100);
-        return `
-          <div class="receipt-item-row">
-            <span>${line.quantity}x ${line.product.name} ${line.discount > 0 ? `(-${line.discount}%)` : ''}</span>
-            <span>${formatCurrency(itemSubtotal)}</span>
-          </div>
-          <div style="font-size:11px; color:#6b7280; margin-top:-4px; margin-bottom:4px;">
-            Unit: ${formatCurrency(line.price)}
-          </div>
-        `;
-      }).join('')}
-    </div>
-
-    <div class="receipt-divider"></div>
-
-    <div class="receipt-totals-area">
-      <div class="summary-row">
-        <span>Subtotal (excl. tax):</span>
-        <span>${formatCurrency(subtotal)}</span>
+    return `
+      <div style="display:flex; justify-content:space-between; margin-bottom:4px; font-size:12px;">
+        <span>${line.quantity}x ${line.product.name}</span>
+        <span style="font-family:monospace;">${formatCurrency(lineTotal)}</span>
       </div>
-      <div class="summary-row">
-        <span>Taxes (VAT 10%):</span>
-        <span>${formatCurrency(taxes)}</span>
-      </div>
-      <div class="summary-row total" style="font-size:15px; font-weight:700;">
-        <span>TOTAL:</span>
-        <span>${formatCurrency(total)}</span>
-      </div>
-      <div class="summary-row" style="margin-top:8px;">
-        <span>Paid (${order.paymentMethod || 'Cash'}):</span>
-        <span>${formatCurrency(tendered)}</span>
-      </div>
-      <div class="summary-row">
-        <span>Change Returned:</span>
-        <span>${formatCurrency(change)}</span>
-      </div>
-    </div>
+    `;
+  }).join('');
 
-    <div class="receipt-barcode-box">
-      <div style="font-size:11px; color:#4b5563;">Thank you for shopping with us!</div>
-      <div class="receipt-barcode-visual">*POS20260042*</div>
-      <div style="font-size:10.5px;">www.odoo.com/pos</div>
-    </div>
-  `;
-}
+  const grandTotal = subtotal + taxTotal;
+  const change = Math.max(0, tenderedAmount - grandTotal);
 
-// Show Toast feedback
-export function showToast(message, type = 'success') {
-  let toastContainer = document.getElementById('odoo-toast-container');
-  if (!toastContainer) {
-    toastContainer = document.createElement('div');
-    toastContainer.id = 'odoo-toast-container';
-    toastContainer.className = 'odoo-toast-container';
-    document.body.appendChild(toastContainer);
+  const receiptBody = document.getElementById('receipt-body-content');
+  if (receiptBody) {
+    receiptBody.innerHTML = `
+      <div style="text-align:center; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:16px;">${storeInfo.storeName}</h3>
+        <div style="font-size:11px; color:#6b7280;">${storeInfo.branchName}</div>
+        <div style="font-size:11px; color:#6b7280;">Tax ID: ${storeInfo.taxId}</div>
+      </div>
+      <hr style="border:none; border-top:1px dashed #cbd5e1; margin:10px 0;">
+      ${itemsHtml}
+      <hr style="border:none; border-top:1px dashed #cbd5e1; margin:10px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>Subtotal:</span><span>${formatCurrency(subtotal)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>VAT (10% Inc.):</span><span>${formatCurrency(taxTotal)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:14px; font-weight:bold; margin-top:6px;">
+        <span>Total Net:</span><span>${formatCurrency(grandTotal)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px; margin-top:6px; color:#6b7280;">
+        <span>Payment Method:</span><span>${paymentMethod}</span>
+      </div>
+      ${paymentMethod === 'Cash' ? `
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:#6b7280;">
+          <span>Tendered:</span><span>${formatCurrency(tenderedAmount)}</span>
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:12px; color:#10b981; font-weight:bold;">
+          <span>Change Returned:</span><span>${formatCurrency(change)}</span>
+        </div>
+      ` : ''}
+    `;
   }
 
-  const toast = document.createElement('div');
-  toast.className = 'odoo-toast';
-  toast.style.borderLeftColor = type === 'error' ? 'var(--odoo-accent)' : 'var(--odoo-teal)';
+  modal.style.display = 'flex';
+}
 
-  toast.innerHTML = `
-    <i class="fas ${type === 'error' ? 'fa-exclamation-circle' : 'fa-check-circle'}" style="color:${type === 'error' ? 'var(--odoo-accent)' : 'var(--odoo-teal)'}"></i>
-    <span>${message}</span>
-  `;
+// Render Z-Report Shift Close Financial Summary Receipt
+export function renderZReportReceipt(session, actualCounted, expectedCash, variance, storeInfo) {
+  let modal = document.getElementById('modal-receipt');
+  if (!modal) return;
 
-  toastContainer.appendChild(toast);
+  const receiptBody = document.getElementById('receipt-body-content');
+  if (receiptBody) {
+    receiptBody.innerHTML = `
+      <div style="text-align:center; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:16px; color:#7e22ce;">Z-REPORT FINANCIAL SHIFT CLOSE</h3>
+        <div style="font-size:11px; color:#6b7280;">Session: ${session.sessionNumber}</div>
+        <div style="font-size:11px; color:#6b7280;">Cashier: ${storeInfo.currentCashier}</div>
+      </div>
+      <hr style="border:none; border-top:1px dashed #cbd5e1; margin:10px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>Opening Float:</span><span>${formatCurrency(session.openingBalance)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>Total Cash Sales:</span><span>${formatCurrency(session.cashSalesTotal)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>Total Bank/Card Sales:</span><span>${formatCurrency(session.bankSalesTotal)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span>Total Credit Sales:</span><span>${formatCurrency(session.creditSalesTotal)}</span>
+      </div>
+      <hr style="border:none; border-top:1px dashed #cbd5e1; margin:10px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold;">
+        <span>Expected Cash Drawer:</span><span>${formatCurrency(expectedCash)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:bold; color:#3b82f6;">
+        <span>Actual Cash Counted:</span><span>${formatCurrency(actualCounted)}</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:bold; color:${variance === 0 ? '#10b981' : '#ef4444'}; margin-top:4px;">
+        <span>Cash Variance:</span><span>${formatCurrency(variance)}</span>
+      </div>
+    `;
+  }
 
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    toast.style.transition = 'opacity 250ms ease';
-    setTimeout(() => toast.remove(), 250);
-  }, 3000);
+  modal.style.display = 'flex';
 }
