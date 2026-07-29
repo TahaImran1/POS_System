@@ -1,8 +1,9 @@
-# Odoo 18 Point of Sale (POS) - Exact Clone Prototype
+# Enterprise Point of Sale (POS) - Vue 3 Edition
 
-A high-fidelity, responsive Point of Sale (POS) web application prototype that faithfully recreates the **Odoo 17 / Odoo 18 Point of Sale** interface, interactions, aesthetic, and workflow.
+A high-fidelity, responsive Point of Sale (POS) web application built from scratch using **Vue 3, Vite, and TypeScript**. 
+*(Note: The previous Vanilla HTML/JS prototype was solely a demo for management and has been superseded by this enterprise-grade build).*
 
-Built with **HTML5, Vanilla CSS3**, and **Modern JavaScript (ES6 Modules)** for zero-config deployment and lightning-fast performance.
+Built for zero-latency performance with a local SQLite database and robust background synchronization.
 
 ## ✨ Features
 

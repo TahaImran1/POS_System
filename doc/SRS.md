@@ -16,9 +16,10 @@ This document provides the complete, production-grade Software Requirements Spec
 
 ### 2.1 Bill of Materials (BOM) & Recipe Inventory Engine
 - **FR-1.1 Composite Product Definition**: The system shall allow defining composite products (e.g. "Cheeseburger", "Cocktail", "Custom Furniture") linked to a Bill of Materials (`PRODUCT_BOM`). Each BOM entry specifies the child raw material (`ingredient_product_id`), quantity required, and unit of measure (UOM).
-- **FR-1.2 Real-Time Auto-Deduction**: Upon completing a sale at an edge POS terminal, the system shall instantly deduct the corresponding raw ingredient quantities from the local SQLite `INVENTORY` table.
+- **FR-1.2 Master Inventory & Local Auto-Deduction**: The Master DB is the authoritative source for inventory stocking. Edge terminals download the inventory state. Upon completing a sale, the POS terminal instantly deducts raw ingredient quantities from its local SQLite `INVENTORY` table.
 - **FR-1.3 Waste & Production Adjustments**: Managers must be able to log inventory adjustments for raw material spoilage, expiration, or kitchen waste with audit notes.
 - **FR-1.4 Low Stock & Reorder Triggers**: The system shall monitor raw material levels against configurable minimum thresholds (`min_stock_alert`), generating automated reorder requisitions to parent supply nodes.
+- **FR-1.5 Inventory Tally & Sync**: The local sales and inventory deductions are synced and tallied with the Master DB to track exactly how much inventory was used, preventing data loss or duplication.
 
 ### 2.2 Multi-Tax & Fiscal Engine
 - **FR-2.1 Tax-Inclusive & Tax-Exclusive Pricing**: Products can be configured as Tax-Inclusive (retail price includes tax) or Tax-Exclusive (tax added at cart checkout).
@@ -34,11 +35,10 @@ This document provides the complete, production-grade Software Requirements Spec
   - **X-Report**: Mid-shift snapshot of current register totals for audit.
   - **Z-Report**: End-of-day final register lock and financial summary printout.
 
-### 2.4 Multi-Tier Pricelists, Customer Credit, & Promotions
+### 2.4 Branch Pricelists & Promotions (Customer features deferred to a later stage)
 - **FR-4.1 Branch & Regional Pricelists**: Support custom price overrides per branch location or geographic region.
-- **FR-4.2 Customer Tier Pricing**: Automatic price adjustments based on customer tag (e.g., Retail, Wholesale, VIP 10% Off).
-- **FR-4.3 Timed Promotions & Rules**: Configurable promotion rules including Happy Hour timed discounts, Buy-X-Get-Y (BOGO), basket subtotal discounts, and coupon code redemptions.
-- **FR-4.4 Customer Credit & Accounts**: Allow trusted customers to charge purchases to a credit account (`CUSTOMER_LEDGER`), enforcing credit limits and tracking partial payments.
+- **FR-4.2 Timed Promotions & Rules**: Configurable promotion rules including Happy Hour timed discounts, Buy-X-Get-Y (BOGO), basket subtotal discounts, and coupon code redemptions.
+*(Note: Customer tier pricing and credit ledgers are deferred to a later development stage).*
 
 ### 2.5 Kitchen Display System (KDS) & Order Production Workflow
 - **FR-5.1 Order Routing**: Line items tagged for kitchen preparation are routed instantly to specific KDS screens (e.g. Grill Station, Bar, Cold Prep) or kitchen thermal printers.

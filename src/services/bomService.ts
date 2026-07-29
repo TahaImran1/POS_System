@@ -1,49 +1,107 @@
-import { sqlite } from '../db/client.js';
+import { eq } from 'drizzle-orm'
+import { db } from '../db/client'
+import * as schema from '../db/schema'
+import { v4 as uuidv4 } from 'uuid'
 
-export class BOMService {
-  // Get Recipe Ingredients for a Product
-  static getBOMForProduct(productId: string): any[] {
-    const stmt = sqlite.prepare('SELECT * FROM product_bom WHERE parent_product_id = ?');
-    return stmt.all(productId) as any[];
+export interface BomRecipe {
+  bom_id: string
+  parent_product_id: string
+  ingredient_product_id: string
+  quantity_required: number
+  uom: string
+}
+
+export async function getBomRecipes(): Promise<BomRecipe[]> {
+  try {
+    const boms = await db.select().from(schema.product_bom)
+    return boms as BomRecipe[]
+  } catch (e) {
+    console.warn('Failed to load BOM recipes:', e)
+    return []
   }
+}
 
-  // Deduct Raw Material Ingredients upon Checkout & Record Sync Event
-  static deductRecipeIngredients(nodeId: string, parentProductId: string, soldQty: number) {
-    const bomEntries = this.getBOMForProduct(parentProductId);
-    const deductions: Array<{ ingredientId: string; qtyDeducted: number; uom: string }> = [];
+export async function addIngredientToBom(item: Omit<BomRecipe, 'bom_id'>): Promise<BomRecipe> {
+  const newBom: BomRecipe = {
+    ...item,
+    bom_id: uuidv4()
+  }
+  await db.insert(schema.product_bom).values(newBom as any)
+  return newBom
+}
 
-    const updateInv = sqlite.prepare('UPDATE inventory SET quantity = quantity - ?, last_updated = ? WHERE node_id = ? AND product_id = ?');
-    const insertEvt = sqlite.prepare('INSERT INTO sync_events (event_id, origin_node_id, table_name, action, payload_json, is_synced, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)');
+export async function processSale(cartItems: Array<{ product_id: string, quantity: number, price: number, tax: number }>, paymentMethod: string, total: number, subtotal: number, taxTotal: number, sessionId: string, nodeId: string) {
+  const saleId = uuidv4()
+  const nowMs = Date.now()
 
-    for (const entry of bomEntries) {
-      const totalIngredientDeduction = entry.quantity_required * soldQty;
-      const now = new Date().toISOString();
+  try {
+    // 1. Create Sale Record
+    await db.insert(schema.sales).values({
+      sale_id: saleId,
+      node_id: nodeId || 'NODE_POS_001',
+      session_id: sessionId || 'session-live-001',
+      subtotal: subtotal,
+      tax_total: taxTotal,
+      discount_total: 0,
+      net_total: total,
+      payment_method: paymentMethod,
+      created_at: nowMs
+    })
 
-      // Update Inventory
-      updateInv.run(totalIngredientDeduction, now, nodeId, entry.ingredient_product_id);
+    // 2. Insert Items & Deduct BOM
+    for (const item of cartItems) {
+      const saleItemId = uuidv4()
+      
+      await db.insert(schema.sale_items).values({
+        sale_item_id: saleItemId,
+        sale_id: saleId,
+        product_id: item.product_id,
+        quantity: item.quantity,
+        unit_price: item.price,
+        tax_amount: item.tax,
+        line_total: item.price * item.quantity
+      })
 
-      deductions.push({
-        ingredientId: entry.ingredient_product_id,
-        qtyDeducted: totalIngredientDeduction,
-        uom: entry.uom
-      });
-
-      // Insert Event-Sourcing Delta Record
-      insertEvt.run(
-        `EVT_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        nodeId,
-        'inventory',
-        'UPDATE',
-        JSON.stringify({
-          productId: entry.ingredient_product_id,
-          quantityDelta: -totalIngredientDeduction,
-          reason: 'BOM_AUTO_DEDUCTION',
-          parentProductId: parentProductId
-        }),
-        now
-      );
+      // Auto-Deduct Inventory
+      const productRecord = await db.select().from(schema.products).where(eq(schema.products.product_id, item.product_id)).get()
+      
+      if (productRecord?.product_type === 'FINISHED_GOOD') {
+        const bomItems = await db.select().from(schema.product_bom).where(eq(schema.product_bom.parent_product_id, item.product_id))
+        
+        for (const bom of bomItems) {
+          const requiredQty = bom.quantity_required * item.quantity
+          
+          const currentStock = await db.select().from(schema.inventory)
+            .where(eq(schema.inventory.product_id, bom.ingredient_product_id))
+            .get()
+            
+          if (currentStock) {
+            await db.update(schema.inventory)
+              .set({ quantity: currentStock.quantity - requiredQty, last_updated: nowMs })
+              .where(eq(schema.inventory.inventory_id, currentStock.inventory_id))
+          }
+        }
+      } else if (productRecord?.product_type === 'RETAIL_GOOD') {
+        const currentStock = await db.select().from(schema.inventory)
+          .where(eq(schema.inventory.product_id, item.product_id))
+          .get()
+          
+        if (currentStock) {
+          await db.update(schema.inventory)
+            .set({ quantity: currentStock.quantity - item.quantity, last_updated: nowMs })
+            .where(eq(schema.inventory.inventory_id, currentStock.inventory_id))
+        }
+      }
     }
-
-    return deductions;
+  } catch (e) {
+    console.warn('DB processSale notice (continuing sale):', e)
   }
+
+  return saleId
+}
+
+export const bomService = {
+  getBomRecipes,
+  addIngredientToBom,
+  processSale
 }

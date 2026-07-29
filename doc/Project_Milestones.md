@@ -33,15 +33,13 @@ This roadmap breaks down the development of the Enterprise Universal POS System 
 
 ---
 
-## 🚩 Milestone 3: Multi-Industry Verticals (Retail, Restaurant, Services, Wholesale)
+## 🚩 Milestone 3: Multi-Industry Verticals (Retail & Restaurant/Bar)
 > **Goal**: Enable dynamic mode switching via `POS_CONFIG`, multi-tier pricelists, and extensible JSON metadata.
 
-- [ ] **Multi-Tier Pricelist & Promotion Engine**: Apply branch-specific prices, customer group discounts (Retail, VIP 10%, Wholesale), and timed Happy Hour promotions.
-- [ ] **Customer Credit & Ledger Account System**: Charge sales to customer credit ledger, enforce credit limits, and record partial balance repayments.
+- [ ] **Multi-Tier Pricelist & Promotion Engine**: Apply branch-specific prices and timed Happy Hour promotions.
 - [ ] **Industry Configuration Engine**: Toggle UI and features based on `pos_mode`:
   - **Retail Mode**: Fast barcode scanning, variant selectors, serial number tracking.
   - **Restaurant / Bar Mode**: Visual floor/table map, KDS order routing (Grill, Bar, Cold Prep), item modifier & flavor pickers.
-  - **Services Mode**: Staff assignment and appointment duration inputs.
 - [ ] **Supervisor PIN Manager Overrides**: Require supervisor authorization PIN for item line voids, price overrides, cart discount applications, and register float edits.
 
 ---
@@ -91,7 +89,7 @@ This roadmap breaks down the development of the Enterprise Universal POS System 
 | :--- | :--- | :--- |
 | **M1: UI & Sessions** | Dual-pane Odoo-like UI, Numpad, & Cash Session Open/Close | Vue 3, Vite, TypeScript |
 | **M2: Edge SQL & BOM** | Offline SQLite DB, Recipe BOM Auto-Deduction, & Multi-Tax | SQLite WASM, OPFS, Drizzle ORM |
-| **M3: Pricelists & Verticals** | Pricelists, Customer Credit Ledger, Retail/Restaurant/KDS | Vue 3, Extensible JSON Attributes |
+| **M3: Pricelists & Verticals** | Pricelists, Retail & Restaurant/KDS Modes | Vue 3, Extensible JSON Attributes |
 | **M4: Server DB** | PostgreSQL & Central Node API | Fastify / Node.js, PostgreSQL |
 | **M5: Sync Engine** | Bi-directional `SYNC_EVENTS` replication | WebSockets, Event Sourcing Engine |
 | **M6: Packaging** | Desktop & PWA binaries | Tauri, PWA Service Worker |
