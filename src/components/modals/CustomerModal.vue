@@ -20,12 +20,7 @@ const searchQuery = ref('')
 const isCreating = ref(false)
 
 // Mock/live customer list matching Odoo defaults
-const customers = ref<Customer[]>([
-  { id: '1', name: 'Flour Power', email: 'flour.power@example.com', phone: '+92 300 1234567', city: 'Lahore' },
-  { id: '2', name: 'Deco Addict', email: 'deco.addict@example.com', phone: '+92 321 9876543', city: 'Karachi' },
-  { id: '3', name: 'Azure Interior', email: 'azure.interior@example.com', phone: '+92 333 5551212', city: 'Islamabad' },
-  { id: '4', name: 'Ready Mat', email: 'ready.mat@example.com', phone: '+92 301 4443322', city: 'Rawalpindi' }
-])
+const customers = ref<Customer[]>([])
 
 // Form for creating new customer
 const newCustomer = ref<Customer>({

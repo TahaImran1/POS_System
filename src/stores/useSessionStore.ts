@@ -6,15 +6,15 @@ import { desc, eq } from 'drizzle-orm'
 
 export const useSessionStore = defineStore('session', {
   state: () => ({
-    isOpen: true,
-    sessionId: 'session-live-001',
+    isOpen: false,
+    sessionId: '',
     nodeId: 'NODE_POS_001',
-    cashierName: 'Mitchell Admin',
-    openingBalance: 1000,
+    cashierName: 'Store Manager',
+    openingBalance: 0,
     cashSalesTotal: 0,
     completedSalesTotal: 0,
     completedSalesCount: 0,
-    lastClosedDate: 'Jul 25',
+    lastClosedDate: '',
     lastClosedBalance: 0
   }),
   actions: {
@@ -49,23 +49,34 @@ export const useSessionStore = defineStore('session', {
             const d = new Date(latest.closed_at)
             this.lastClosedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           }
+        } else {
+          this.isOpen = false
+          this.openingBalance = 0
         }
       } catch (e) {
-        console.warn('Session load warning, defaulting to open session:', e)
-        this.isOpen = true
+        console.warn('Session load warning, defaulting to closed session:', e)
+        this.isOpen = false
+        this.openingBalance = 0
       }
     },
     async openSession(float: number) {
       try {
-        if (!this.nodeId) {
-          const posNode = await db.select().from(schema.nodes).where(eq(schema.nodes.node_type, 'POS')).limit(1).get()
-          if (posNode) this.nodeId = posNode.node_id
+        const posNode = await db.select().from(schema.nodes).where(eq(schema.nodes.node_type, 'POS')).limit(1).get()
+        if (posNode) {
+          this.nodeId = posNode.node_id
+        } else {
+          this.nodeId = 'NODE_POS_001'
+          await db.insert(schema.nodes).values({
+            node_id: 'NODE_POS_001',
+            node_type: 'POS',
+            location_name: 'Main Store Register 1'
+          }).catch(() => {})
         }
 
         this.sessionId = uuidv4()
         await db.insert(schema.cash_sessions).values({
           session_id: this.sessionId,
-          node_id: this.nodeId || 'NODE_POS_001',
+          node_id: this.nodeId,
           cashier_name: this.cashierName,
           opening_balance: float,
           status: 'OPEN',
@@ -103,6 +114,14 @@ export const useSessionStore = defineStore('session', {
       }
 
       this.isOpen = false
+    },
+    resetSessionState() {
+      this.isOpen = false
+      this.sessionId = ''
+      this.openingBalance = 0
+      this.cashSalesTotal = 0
+      this.completedSalesTotal = 0
+      this.completedSalesCount = 0
     },
     addCashSale(amount: number) {
       this.cashSalesTotal += amount

@@ -3,6 +3,9 @@ import type { Product } from './useProductStore'
 import { useSessionStore } from './useSessionStore'
 import { processSale } from '../services/bomService'
 import { useProductStore } from './useProductStore'
+import { useToast } from '../composables/useToast'
+import { useSettingsStore } from './useSettingsStore'
+import { taxService, type TaxGroup } from '../services/taxService'
 
 export interface CartItem {
   id: string
@@ -19,18 +22,28 @@ export interface Ticket {
   name: string
   items: CartItem[]
   selectedItemId: string | null
+  billTaxesSnapshot: TaxGroup[]
 }
 
 export const useCartStore = defineStore('cart', {
-  state: () => ({
-    tickets: [
-      { id: 'table-1', name: '1', items: [], selectedItemId: null }
-    ] as Ticket[],
-    activeTicketId: 'table-1',
-    numpadMode: 'qty' as 'qty' | 'disc' | 'price',
-    isCheckoutOpen: false,
-    nextTicketNumber: 2
-  }),
+  state: () => {
+    const tickets: Ticket[] = [{
+      id: 'table-1',
+      name: 'Table 1',
+      items: [],
+      selectedItemId: null,
+      billTaxesSnapshot: []
+    }]
+    
+    return {
+      tickets,
+      activeTicketId: 'table-1',
+      numpadMode: 'qty' as 'qty' | 'disc' | 'price',
+      isCheckoutOpen: false,
+      nextTicketNumber: 2,
+      activeBillTaxes: [] as TaxGroup[]
+    }
+  },
   getters: {
     activeTicket: (state) => {
       return state.tickets.find(t => t.id === state.activeTicketId) || state.tickets[0]
@@ -51,12 +64,37 @@ export const useCartStore = defineStore('cart', {
         return sum + (p * q * (1 - d / 100))
       }, 0)
     },
-    taxes(): number {
+    itemTaxes(): number {
       return this.items.reduce((sum: number, item: CartItem) => {
         const t = Number(item.tax) || 0
         const q = Number(item.quantity) || 1
         return sum + (t * q)
       }, 0)
+    },
+    globalGstTax(): number {
+      const ticket = this.activeTicket
+      if (!ticket) return 0
+      
+      const billTaxes = (ticket.billTaxesSnapshot && ticket.billTaxesSnapshot.length > 0)
+        ? ticket.billTaxesSnapshot
+        : this.activeBillTaxes
+      
+      if (!billTaxes || billTaxes.length === 0) return 0
+
+      let totalGlobalTax = 0
+      for (const tax of billTaxes) {
+        if (tax.is_inclusive) {
+          const rate = tax.rate_percentage / 100
+          const base = this.subtotal / (1 + rate)
+          totalGlobalTax += this.subtotal - base
+        } else {
+          totalGlobalTax += this.subtotal * (tax.rate_percentage / 100)
+        }
+      }
+      return totalGlobalTax
+    },
+    taxes(): number {
+      return this.itemTaxes + this.globalGstTax
     },
     total(): number {
       const val = this.subtotal + this.taxes
@@ -67,13 +105,29 @@ export const useCartStore = defineStore('cart', {
     }
   },
   actions: {
-    createNewTicket(customName?: string) {
+    async fetchActiveBillTaxes() {
+      try {
+        const allTaxes = await taxService.getTaxGroups()
+        this.activeBillTaxes = allTaxes.filter(t => t.tax_type === 'BILL' && t.is_active)
+        for (const ticket of this.tickets) {
+          if (!ticket.billTaxesSnapshot || ticket.billTaxesSnapshot.length === 0) {
+            ticket.billTaxesSnapshot = [...this.activeBillTaxes]
+          }
+        }
+      } catch (e) {
+        console.warn('Could not fetch active bill taxes:', e)
+      }
+    },
+    async createNewTicket(customName?: string) {
       const newName = customName || this.nextTicketNumber.toString()
+      await this.fetchActiveBillTaxes()
+
       const newTicket: Ticket = {
         id: Math.random().toString(36).substr(2, 9),
         name: newName,
         items: [],
-        selectedItemId: null
+        selectedItemId: null,
+        billTaxesSnapshot: [...this.activeBillTaxes]
       }
       this.tickets.push(newTicket)
       this.activeTicketId = newTicket.id
@@ -100,14 +154,21 @@ export const useCartStore = defineStore('cart', {
       if (ticket) ticket.selectedItemId = id
     },
 
-    addProduct(product: Product) {
+    async addProduct(product: Product) {
+      if (this.activeBillTaxes.length === 0) {
+        await this.fetchActiveBillTaxes()
+      }
       if (this.tickets.length === 0 || !this.activeTicketId) {
-        this.createNewTicket()
+        await this.createNewTicket()
       }
       let ticket = this.tickets.find(t => t.id === this.activeTicketId)
       if (!ticket) {
-        this.createNewTicket()
+        await this.createNewTicket()
         ticket = this.tickets.find(t => t.id === this.activeTicketId)!
+      }
+
+      if (!ticket.billTaxesSnapshot || ticket.billTaxesSnapshot.length === 0) {
+        ticket.billTaxesSnapshot = [...this.activeBillTaxes]
       }
 
       const existing = ticket.items.find(i => i.product.id === product.id)
@@ -115,13 +176,14 @@ export const useCartStore = defineStore('cart', {
         existing.quantity += 1
         ticket.selectedItemId = existing.id
       } else {
+        const itemTax = Number(product.taxAmount) || 0
         const newItem: CartItem = {
           id: Math.random().toString(36).substr(2, 9),
           product,
           quantity: 1,
           price: Number(product.price) || 0,
           discount: 0,
-          tax: Number(product.taxAmount) || (Number(product.price) * 0.1),
+          tax: itemTax,
           course: 'Course 1'
         }
         ticket.items.push(newItem)
@@ -135,16 +197,30 @@ export const useCartStore = defineStore('cart', {
     
     handleNumpadInput(val: string) {
       const ticket = this.tickets.find(t => t.id === this.activeTicketId)
-      if (!ticket || !ticket.selectedItemId) return
+      if (!ticket) return
       
+      // Auto-select latest item if no item selected
+      if (!ticket.selectedItemId && ticket.items.length > 0) {
+        ticket.selectedItemId = ticket.items[ticket.items.length - 1].id
+      }
+      if (!ticket.selectedItemId) return
+
       const item = ticket.items.find(i => i.id === ticket.selectedItemId)
       if (!item) return
 
       if (val === 'backspace') {
-        if (this.numpadMode === 'qty') item.quantity = Math.floor(item.quantity / 10)
-        if (item.quantity === 0) {
-          ticket.items = ticket.items.filter(i => i.id !== ticket.selectedItemId)
-          ticket.selectedItemId = null
+        if (this.numpadMode === 'qty') {
+          item.quantity = Math.floor(item.quantity / 10)
+          if (item.quantity === 0) {
+            ticket.items = ticket.items.filter(i => i.id !== ticket.selectedItemId)
+            ticket.selectedItemId = ticket.items.length > 0 ? ticket.items[ticket.items.length - 1].id : null
+          }
+        } else if (this.numpadMode === 'disc') {
+          item.discount = Math.floor(item.discount / 10)
+        } else if (this.numpadMode === 'price') {
+          const str = item.price.toString()
+          const newStr = str.slice(0, -1)
+          item.price = newStr ? parseFloat(newStr) : 0
         }
         return
       }
@@ -155,7 +231,8 @@ export const useCartStore = defineStore('cart', {
       if (this.numpadMode === 'qty') {
         item.quantity = item.quantity === 1 ? num : parseInt(item.quantity.toString() + val)
       } else if (this.numpadMode === 'disc') {
-        item.discount = parseInt(item.discount.toString() + val)
+        const newDisc = parseInt(item.discount.toString() + val)
+        item.discount = Math.min(100, isNaN(newDisc) ? 0 : newDisc)
       } else if (this.numpadMode === 'price') {
         item.price = parseFloat(item.price.toString() + val)
       }
@@ -163,10 +240,11 @@ export const useCartStore = defineStore('cart', {
 
     fireCourse(courseName: string = 'Course 1') {
       const ticket = this.tickets.find(t => t.id === this.activeTicketId)
+      const toast = useToast()
       if (ticket && ticket.items.length > 0) {
-        alert(`🔥 Order (${ticket.name}) items under ${courseName} sent to kitchen!`)
+        toast.success(`🔥 Order (${ticket.name}) items under ${courseName} sent to kitchen!`)
       } else {
-        alert('Cart is empty. Add products before firing course.')
+        toast.warning('Cart is empty. Add products before firing course.')
       }
     },
     
@@ -180,7 +258,9 @@ export const useCartStore = defineStore('cart', {
     
     async checkout(paymentMethod: string) {
       const sessionStore = useSessionStore()
-      if (!sessionStore.isOpen) throw new Error("No active session!")
+      if (!sessionStore.isOpen) {
+        await sessionStore.openSession(100)
+      }
       
       if (this.items.length === 0) return null
 
@@ -192,14 +272,19 @@ export const useCartStore = defineStore('cart', {
       }))
 
       const finalTotal = this.total
+      const currentSubtotal = this.subtotal
+      const currentItemTaxes = this.itemTaxes
+      const currentGlobalGst = this.globalGstTax
+      const currentTotalTaxes = this.taxes
       const activeName = this.activeTicket?.name || 'Order'
+      const checkoutItems = JSON.parse(JSON.stringify(this.items))
 
-      await processSale(
+      const saleId = await processSale(
         payload, 
         paymentMethod, 
         finalTotal, 
-        this.subtotal, 
-        this.taxes, 
+        currentSubtotal, 
+        currentTotalTaxes, 
         sessionStore.sessionId, 
         sessionStore.nodeId
       )
@@ -216,7 +301,13 @@ export const useCartStore = defineStore('cart', {
       this.closeTicket(this.activeTicketId)
       
       return {
+        saleId,
         total: finalTotal,
+        subtotal: currentSubtotal,
+        itemTaxes: currentItemTaxes,
+        globalGst: currentGlobalGst,
+        totalTaxes: currentTotalTaxes,
+        items: checkoutItems,
         method: paymentMethod,
         ticketName: activeName
       }

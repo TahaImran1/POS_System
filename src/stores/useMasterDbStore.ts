@@ -45,9 +45,9 @@ export const useMasterDbStore = defineStore('masterDb', {
       const upsertSetting = async (key: string, val: string) => {
         const existing = await db.select().from(schema.app_settings).where(eq(schema.app_settings.key, key))
         if (existing.length > 0) {
-          await db.update(schema.app_settings).set({ value: val, updated_at: Date.now() }).where(eq(schema.app_settings.key, key))
+          await db.update(schema.app_settings).set({ value: val, updated_at: new Date() }).where(eq(schema.app_settings.key, key))
         } else {
-          await db.insert(schema.app_settings).values({ setting_id: uuidv4(), key, value: val, updated_at: Date.now() })
+          await db.insert(schema.app_settings).values({ setting_id: uuidv4(), key, value: val, updated_at: new Date() })
         }
       }
 

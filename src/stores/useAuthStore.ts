@@ -13,7 +13,7 @@ export interface UserAccount {
   pin: string
   role: UserRole
   node_id?: string | null
-  created_at?: number | null
+  created_at?: Date | number | null
 }
 
 export const useAuthStore = defineStore('auth', {
@@ -28,6 +28,7 @@ export const useAuthStore = defineStore('auth', {
     isDeveloper: (state) => state.activeRole === 'DEVELOPER',
     isManager: (state) => state.activeRole === 'MANAGER',
     isSalesperson: (state) => state.activeRole === 'SALESPERSON',
+    hasManagerPrivileges: (state) => state.activeRole === 'MANAGER' || state.activeRole === 'DEVELOPER',
     roleLabel: (state) => {
       switch (state.activeRole) {
         case 'DEVELOPER': return 'Developer / Super Admin'
@@ -64,6 +65,11 @@ export const useAuthStore = defineStore('auth', {
         return true
       }
       return false
+    },
+
+    verifyManagerPin(pin: string): boolean {
+      const match = this.users.find(u => (u.role === 'MANAGER' || u.role === 'DEVELOPER') && u.pin === pin)
+      return !!match
     },
 
     switchRole(role: UserRole) {

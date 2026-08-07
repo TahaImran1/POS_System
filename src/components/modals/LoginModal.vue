@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useAuthStore, type UserRole } from '../../stores/useAuthStore'
+import { useToast } from '../../composables/useToast'
 
-
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'role-changed'])
 const authStore = useAuthStore()
+const toast = useToast()
 
 const pinInput = ref('')
 const errorMsg = ref('')
-const selectedRole = ref<UserRole>('DEVELOPER')
 
 const appendPin = (num: string) => {
   if (pinInput.value.length < 6) {
@@ -23,27 +23,59 @@ const clearPin = () => {
 
 const handleLogin = async () => {
   if (!pinInput.value) {
-    // Quick role switch if PIN empty for demo
-    authStore.switchRole(selectedRole.value)
-    emit('close')
+    errorMsg.value = 'Please enter a PIN code.'
     return
   }
 
   const success = await authStore.verifyPinAndLogin(pinInput.value)
   if (success) {
+    const userObj = authStore.currentUser
+    toast.success(`Welcome ${userObj?.name || 'User'}! Active role: ${authStore.roleLabel}`)
     pinInput.value = ''
     errorMsg.value = ''
+    emit('role-changed', authStore.activeRole)
     emit('close')
   } else {
-    errorMsg.value = 'Invalid PIN code. Try 1234 (Dev), 5555 (Manager), 0000 (Cashier).'
+    errorMsg.value = 'Invalid PIN code. Please try again.'
     pinInput.value = ''
   }
 }
 
 const quickSwitchRole = (role: UserRole) => {
   authStore.switchRole(role)
+  toast.success(`Switched active view to ${authStore.roleLabel}`)
+  emit('role-changed', role)
   emit('close')
 }
+
+// Handle physical keyboard typing for PIN entry
+const handleKeydown = (e: KeyboardEvent) => {
+  if (e.key >= '0' && e.key <= '9') {
+    appendPin(e.key)
+    e.preventDefault()
+  } else if (e.key === 'Backspace' || e.key === 'Delete') {
+    if (pinInput.value.length > 0) {
+      pinInput.value = pinInput.value.slice(0, -1)
+    } else {
+      clearPin()
+    }
+    e.preventDefault()
+  } else if (e.key === 'Enter') {
+    handleLogin()
+    e.preventDefault()
+  } else if (e.key === 'Escape') {
+    emit('close')
+    e.preventDefault()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
 </script>
 
 <template>
@@ -66,15 +98,7 @@ const quickSwitchRole = (role: UserRole) => {
       <!-- Quick Role Select Tabs -->
       <div class="p-4 bg-gray-50 border-b border-gray-200">
         <div class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Switch Active View Mode</div>
-        <div class="grid grid-cols-3 gap-2">
-          <button 
-            @click="quickSwitchRole('DEVELOPER')"
-            :class="[authStore.activeRole === 'DEVELOPER' ? 'bg-[#714B67] text-white font-bold shadow-xs' : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300']"
-            class="py-2 px-1 rounded-lg text-xs flex flex-col items-center gap-1 transition-all"
-          >
-            <i class="fas fa-code"></i>
-            <span>Developer</span>
-          </button>
+        <div class="grid grid-cols-2 gap-2">
 
           <button 
             @click="quickSwitchRole('MANAGER')"

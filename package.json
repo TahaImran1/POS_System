@@ -1,16 +1,44 @@
 {
   "name": "pos_system",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Enterprise Universal Multi-Branch Point of Sale System",
-  "main": "src/main.ts",
+  "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "electron": "electron .",
+    "electron:dev": "npx -y concurrently \"vite\" \"npx -y wait-on http://localhost:5173 && electron .\"",
+    "app": "electron .",
     "build": "vue-tsc -b && vite build",
+    "dist:win": "npm run build && electron-builder --win",
     "preview": "vite preview",
     "launch-app": "start msedge --app=http://localhost:5173 || start chrome --app=http://localhost:5173",
     "seed": "npx tsx server/db/seed.ts",
     "server": "npx tsx server/src/index.ts"
+  },
+  "build": {
+    "appId": "com.posenterprise.app",
+    "productName": "POS Enterprise System",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "POS Enterprise"
+    }
   },
   "dependencies": {
     "@fastify/static": "^10.1.2",
@@ -21,15 +49,19 @@
     "drizzle-orm": "^0.38.4",
     "fastify": "^5.2.1",
     "lucide-vue-next": "^1.0.0",
+    "pg": "^8.13.1",
     "pinia": "^4.0.2",
     "uuid": "^14.0.1",
     "vue": "^3.5.40",
-    "vue-router": "^5.2.0",
+    "vue-router": "^4.5.0",
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.10",
+    "@types/pg": "^8.11.10",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.14",
     "@vitejs/plugin-vue": "^5.2.4",

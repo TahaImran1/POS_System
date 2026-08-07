@@ -8,11 +8,14 @@ export interface TaxGroup {
   name: string
   rate_percentage: number
   is_inclusive: boolean
+  tax_type: 'ITEM' | 'BILL'
+  is_active: boolean
+  parent_tax_id?: string | null
 }
 
 export async function getTaxGroups(): Promise<TaxGroup[]> {
   try {
-    const groups = await db.select().from(schema.tax_groups)
+    const groups = await db.select().from(schema.tax_groups).where(eq(schema.tax_groups.is_active, true))
     return groups as TaxGroup[]
   } catch (e) {
     console.warn('Failed to load tax groups:', e)
@@ -20,13 +23,44 @@ export async function getTaxGroups(): Promise<TaxGroup[]> {
   }
 }
 
-export async function createTaxGroup(taxGroup: Omit<TaxGroup, 'tax_group_id'>): Promise<TaxGroup> {
+export async function createTaxGroup(taxGroup: Omit<TaxGroup, 'tax_group_id' | 'is_active' | 'parent_tax_id'>): Promise<TaxGroup> {
   const newTax: TaxGroup = {
     ...taxGroup,
-    tax_group_id: uuidv4()
+    tax_group_id: uuidv4(),
+    is_active: true,
+    parent_tax_id: null
   }
   await db.insert(schema.tax_groups).values(newTax as any)
   return newTax
+}
+
+export async function updateTaxGroup(id: string, taxGroup: Omit<TaxGroup, 'tax_group_id' | 'is_active' | 'parent_tax_id'>): Promise<void> {
+  // 1. Deactivate old tax group
+  await db.update(schema.tax_groups)
+    .set({ is_active: false })
+    .where(eq(schema.tax_groups.tax_group_id, id))
+
+  // 2. Create new version
+  const newTaxId = uuidv4()
+  const newTax: TaxGroup = {
+    ...taxGroup,
+    tax_group_id: newTaxId,
+    is_active: true,
+    parent_tax_id: id
+  }
+  await db.insert(schema.tax_groups).values(newTax as any)
+
+  // 3. Migrate product associations to the new version
+  await db.update(schema.product_taxes)
+    .set({ tax_group_id: newTaxId })
+    .where(eq(schema.product_taxes.tax_group_id, id))
+}
+
+export async function deleteTaxGroup(id: string): Promise<void> {
+  // Remove associations from products so it no longer applies to future sales
+  await db.delete(schema.product_taxes).where(eq(schema.product_taxes.tax_group_id, id))
+  // Soft delete the tax group itself
+  await db.update(schema.tax_groups).set({ is_active: false }).where(eq(schema.tax_groups.tax_group_id, id))
 }
 
 export async function calculateTaxesForProduct(productId: string, price: number): Promise<{ taxAmount: number, isInclusive: boolean }> {
@@ -39,7 +73,7 @@ export async function calculateTaxesForProduct(productId: string, price: number)
 
   for (const pt of productTaxes) {
     const group = await db.select().from(schema.tax_groups).where(eq(schema.tax_groups.tax_group_id, pt.tax_group_id)).get()
-    if (group) {
+    if (group && group.is_active) {
       if (group.is_inclusive) {
         const rate = group.rate_percentage / 100
         const base = price / (1 + rate)
@@ -57,5 +91,7 @@ export async function calculateTaxesForProduct(productId: string, price: number)
 export const taxService = {
   getTaxGroups,
   createTaxGroup,
+  updateTaxGroup,
+  deleteTaxGroup,
   calculateTaxesForProduct
 }

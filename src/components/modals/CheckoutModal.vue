@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useCartStore } from '../../stores/useCartStore'
 import { useSessionStore } from '../../stores/useSessionStore'
+import { useToast } from '../../composables/useToast'
 
 const props = defineProps<{
   show: boolean
@@ -11,6 +12,7 @@ const emit = defineEmits(['close', 'success'])
 
 const cart = useCartStore()
 const session = useSessionStore()
+const toast = useToast()
 
 const tendered = ref(0)
 const paymentMethod = ref('Cash')
@@ -41,7 +43,7 @@ const handleTenderKey = (key: string) => {
 
 const validateOrder = async () => {
   if (tendered.value < cart.total) {
-    alert('Insufficient funds tendered!')
+    toast.warning('Insufficient funds tendered!')
     return
   }
   
@@ -59,9 +61,57 @@ const validateOrder = async () => {
       })
     }
   } catch (error: any) {
-    alert(error.message || 'Failed to checkout')
+    toast.error(error.message || 'Failed to checkout')
   }
 }
+
+// Physical keyboard listener when modal is open
+const handleCheckoutKeydown = (e: KeyboardEvent) => {
+  if (!props.show) return
+
+  const target = e.target as HTMLElement
+  if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+    return
+  }
+
+  if (e.key >= '0' && e.key <= '9') {
+    handleTenderKey(e.key)
+    e.preventDefault()
+    return
+  }
+
+  if (e.key === '.' || e.key === ',') {
+    handleTenderKey('.')
+    e.preventDefault()
+    return
+  }
+
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    handleTenderKey('C')
+    e.preventDefault()
+    return
+  }
+
+  if (e.key === 'Enter') {
+    validateOrder()
+    e.preventDefault()
+    return
+  }
+
+  if (e.key === 'Escape') {
+    emit('close')
+    e.preventDefault()
+    return
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleCheckoutKeydown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleCheckoutKeydown)
+})
 </script>
 
 <template>

@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useCartStore } from '../stores/useCartStore'
 import { useProductStore } from '../stores/useProductStore'
+import { useSettingsStore } from '../stores/useSettingsStore'
 import type { Product } from '../stores/useProductStore'
 
 const props = defineProps<{
@@ -10,6 +11,9 @@ const props = defineProps<{
 
 const cart = useCartStore()
 const productStore = useProductStore()
+const settingsStore = useSettingsStore()
+
+const isRetail = computed(() => settingsStore.posMode === 'retail')
 
 const addToCart = () => {
   cart.addProduct(props.product)
@@ -43,19 +47,33 @@ const categoryColorClass = computed(() => {
     <div class="flex-1 w-full bg-[#f8f9fa] rounded flex items-center justify-center overflow-hidden mb-1 relative p-1">
       <img :src="product.image" :alt="product.name" class="w-full h-full object-contain" />
       
-      <!-- Cart Quantity Badge (Green rounded badge on top right matching Odoo) -->
+      <!-- Cart Quantity Badge -->
       <div 
         v-if="quantityInCart > 0" 
-        class="absolute top-1 right-1 bg-[#2ECC71] text-white text-xs px-2 py-0.5 font-bold rounded-full shadow-sm z-10"
+        class="absolute top-1 right-1 bg-[#2ECC71] text-white text-[10px] px-1.5 py-0.5 font-bold rounded-full shadow-sm z-10"
       >
         {{ quantityInCart }}
       </div>
+
+      <!-- Retail Mode: Dynamic Stock Badge & Barcode Tag -->
+      <div 
+        v-if="isRetail" 
+        class="absolute bottom-1 left-1 bg-teal-800/90 text-white text-[9px] font-mono px-1 py-0.5 rounded font-bold shadow-xs z-10"
+      >
+        Stock: {{ product.stock !== undefined ? product.stock : 100 }}
+      </div>
     </div>
     
-    <!-- Title Area (Bottom) -->
-    <div class="h-7 flex items-center justify-center w-full px-1">
-      <div class="text-[11px] leading-tight text-center font-bold text-gray-800 line-clamp-2 w-full break-words">
+    <!-- Title & Barcode Info (Bottom) -->
+    <div class="h-8 flex flex-col items-center justify-center w-full px-0.5">
+      <div class="text-[11px] leading-tight text-center font-bold text-gray-800 line-clamp-1 w-full break-words">
         {{ product.name }}
+      </div>
+      <div v-if="isRetail && product.barcode" class="text-[9px] font-mono text-teal-600 font-semibold truncate">
+        #{{ product.barcode }}
+      </div>
+      <div v-else class="text-[10px] font-mono text-gray-500 font-semibold">
+        {{ product.price.toFixed(2) }} Rs.
       </div>
     </div>
   </div>

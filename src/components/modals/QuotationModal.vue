@@ -1,12 +1,15 @@
 <script setup lang="ts">
+import { useToast } from '../../composables/useToast'
+
 const props = defineProps<{
   show: boolean
 }>()
 
 const emit = defineEmits(['close'])
+const toast = useToast()
 
 const handleConfirm = () => {
-  alert('Quotation created successfully!')
+  toast.success('Quotation created successfully!')
   emit('close')
 }
 </script>

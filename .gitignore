@@ -22,16 +22,21 @@ Thumbs.db
 # Dependency directories
 node_modules/
 
-# Build outputs
+# Build outputs & Electron release installers
 dist/
 dev-dist/
 build/
+release/
+out/
 .vercel
+.electron-user-data/
+*.tsbuildinfo
 
 # Separate Backend Server directory (Pushed to pos-backend repo)
 server/
 
-# Local SQLite databases
+# Local SQLite databases & test scripts
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+test_drizzle.ts

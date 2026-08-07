@@ -15,7 +15,8 @@ export const products = sqliteTable('products', {
   default_price: real('default_price').notNull().default(0),
   uom: text('uom').notNull().default('PCS'),
   image: text('image'),
-  description: text('description')
+  description: text('description'),
+  category: text('category').default('misc')
 })
 
 export const product_bom = sqliteTable('product_bom', {
@@ -32,14 +33,29 @@ export const inventory = sqliteTable('inventory', {
   product_id: text('product_id').notNull().references(() => products.product_id),
   quantity: real('quantity').notNull().default(0),
   min_stock_alert: real('min_stock_alert').notNull().default(0),
-  last_updated: integer('last_updated', { mode: 'timestamp_ms' }) // timestamp
+  last_updated: integer('last_updated') // timestamp ms
+})
+
+export const inventory_logs = sqliteTable('inventory_logs', {
+  log_id: text('log_id').primaryKey(),
+  node_id: text('node_id').references(() => nodes.node_id),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  movement_type: text('movement_type').notNull(), // RESTOCK, POS_SALE, BOM_DEDUCTION, MANUAL_ADJUSTMENT, INITIAL_SEED
+  quantity_change: real('quantity_change').notNull(),
+  quantity_after: real('quantity_after').notNull(),
+  reference_note: text('reference_note'),
+  user_name: text('user_name'),
+  created_at: integer('created_at')
 })
 
 export const tax_groups = sqliteTable('tax_groups', {
   tax_group_id: text('tax_group_id').primaryKey(),
   name: text('name').notNull(),
   rate_percentage: real('rate_percentage').notNull(),
-  is_inclusive: integer('is_inclusive', { mode: 'boolean' }).notNull()
+  is_inclusive: integer('is_inclusive', { mode: 'boolean' }).notNull(),
+  tax_type: text('tax_type').notNull().default('ITEM'), // 'ITEM' or 'BILL'
+  is_active: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  parent_tax_id: text('parent_tax_id')
 })
 
 export const product_taxes = sqliteTable('product_taxes', {
@@ -70,8 +86,8 @@ export const cash_sessions = sqliteTable('cash_sessions', {
   closing_cash_counted: real('closing_cash_counted'),
   cash_variance: real('cash_variance'),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED
-  opened_at: integer('opened_at', { mode: 'timestamp_ms' }),
-  closed_at: integer('closed_at', { mode: 'timestamp_ms' })
+  opened_at: integer('opened_at'),
+  closed_at: integer('closed_at')
 })
 
 export const cash_drops = sqliteTable('cash_drops', {
@@ -80,13 +96,17 @@ export const cash_drops = sqliteTable('cash_drops', {
   type: text('type').notNull(), // CASH_IN, CASH_OUT_SAFE, EXPENSE
   amount: real('amount').notNull(),
   reason: text('reason'),
-  created_at: integer('created_at', { mode: 'timestamp_ms' })
+  created_at: integer('created_at')
 })
 
 export const sales = sqliteTable('sales', {
   sale_id: text('sale_id').primaryKey(),
   node_id: text('node_id').notNull().references(() => nodes.node_id),
   session_id: text('session_id').notNull().references(() => cash_sessions.session_id),
+  origin_branch_id: text('origin_branch_id'),
+  origin_pos_id: text('origin_pos_id'),
+  origin_user_id: text('origin_user_id'),
+  synced: integer('synced', { mode: 'boolean' }).notNull().default(false),
   subtotal: real('subtotal').notNull(),
   tax_total: real('tax_total').notNull(),
   discount_total: real('discount_total').notNull(),
@@ -94,7 +114,21 @@ export const sales = sqliteTable('sales', {
   payment_method: text('payment_method').notNull(),
   order_type: text('order_type').notNull().default('TAKEAWAY'),
   extra_attributes: text('extra_attributes', { mode: 'json' }),
-  created_at: integer('created_at', { mode: 'timestamp_ms' })
+  created_at: integer('created_at'),
+  updated_at: integer('updated_at')
+})
+
+export const sales_audit_logs = sqliteTable('sales_audit_logs', {
+  audit_id: text('audit_id').primaryKey(),
+  sale_id: text('sale_id').notNull().references(() => sales.sale_id),
+  modified_by_user_id: text('modified_by_user_id').notNull(),
+  shift_session_id: text('shift_session_id').notNull(),
+  action_type: text('action_type').notNull(), // PRICE_ADJUSTMENT, QUANTITY_CHANGE, VOID, RETURN
+  old_snapshot_json: text('old_snapshot_json').notNull(),
+  new_snapshot_json: text('new_snapshot_json').notNull(),
+  reason_note: text('reason_note').notNull(),
+  synced: integer('synced', { mode: 'boolean' }).notNull().default(false),
+  created_at: integer('created_at').notNull()
 })
 
 export const sale_items = sqliteTable('sale_items', {
@@ -120,7 +154,7 @@ export const sync_events = sqliteTable('sync_events', {
   table_name: text('table_name').notNull(),
   action: text('action').notNull(), // INSERT, UPDATE, DELETE
   payload: text('payload').notNull(), // JSON string
-  created_at: integer('created_at', { mode: 'timestamp_ms' })
+  created_at: integer('created_at')
 })
 
 export const sync_ledger = sqliteTable('sync_ledger', {
@@ -128,7 +162,7 @@ export const sync_ledger = sqliteTable('sync_ledger', {
   source_node_id: text('source_node_id').notNull().references(() => nodes.node_id),
   target_node_id: text('target_node_id').notNull().references(() => nodes.node_id),
   last_synced_event_id: text('last_synced_event_id').references(() => sync_events.event_id),
-  last_sync_time: integer('last_sync_time', { mode: 'timestamp_ms' })
+  last_sync_time: integer('last_sync_time')
 })
 
 export const users = sqliteTable('users', {
@@ -138,13 +172,12 @@ export const users = sqliteTable('users', {
   pin: text('pin').notNull(),
   role: text('role').notNull(), // DEVELOPER, MANAGER, SALESPERSON
   node_id: text('node_id').references(() => nodes.node_id),
-  created_at: integer('created_at', { mode: 'timestamp_ms' })
+  created_at: integer('created_at')
 })
 
 export const app_settings = sqliteTable('app_settings', {
   setting_id: text('setting_id').primaryKey(),
   key: text('key').notNull().unique(),
   value: text('value').notNull(),
-  updated_at: integer('updated_at', { mode: 'timestamp_ms' })
+  updated_at: integer('updated_at')
 })
-

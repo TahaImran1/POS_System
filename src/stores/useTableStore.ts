@@ -13,7 +13,7 @@ export interface Table {
 
 export const useTableStore = defineStore('table', {
   state: () => ({
-    floorName: 'pyora',
+    floorName: 'Main Floor',
     activeTableId: null as number | null,
     tables: [
       { id: 1, name: '1', seats: 4, occupied: true, orderId: 'table-1-order', x: 92, y: 150, shape: 'square' },

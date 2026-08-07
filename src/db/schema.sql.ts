@@ -9,6 +9,18 @@ CREATE TABLE IF NOT EXISTS \`cash_drops\` (
 	FOREIGN KEY (\`session_id\`) REFERENCES \`cash_sessions\`(\`session_id\`) ON UPDATE no action ON DELETE no action
 );
 
+CREATE TABLE IF NOT EXISTS \`inventory_logs\` (
+	\`log_id\` text PRIMARY KEY NOT NULL,
+	\`node_id\` text,
+	\`product_id\` text NOT NULL,
+	\`movement_type\` text NOT NULL,
+	\`quantity_change\` real NOT NULL,
+	\`quantity_after\` real NOT NULL,
+	\`reference_note\` text,
+	\`user_name\` text,
+	\`created_at\` integer
+);
+
 CREATE TABLE IF NOT EXISTS \`cash_sessions\` (
 	\`session_id\` text PRIMARY KEY NOT NULL,
 	\`node_id\` text NOT NULL,
@@ -82,7 +94,8 @@ CREATE TABLE IF NOT EXISTS \`products\` (
 	\`default_price\` real DEFAULT 0 NOT NULL,
 	\`uom\` text DEFAULT 'PCS' NOT NULL,
 	\`image\` text,
-	\`description\` text
+	\`description\` text,
+	\`category\` text DEFAULT 'misc'
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS \`products_barcode_unique\` ON \`products\` (\`barcode\`);

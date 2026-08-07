@@ -2,10 +2,15 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import './style.css'
 import App from './App.vue'
-import { registerSW } from 'virtual:pwa-register'
 
-// Register PWA service worker
-registerSW({ immediate: true })
+// Unregister stale service workers to prevent cached dist bundle locks in Electron/Browser
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister()
+    }
+  })
+}
 
 const app = createApp(App)
 
