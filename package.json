@@ -4,6 +4,10 @@
   "description": "Enterprise Universal Multi-Branch Point of Sale System",
   "main": "electron/main.cjs",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TahaImran1/POS_System.git"
+  },
   "scripts": {
     "dev": "vite",
     "electron": "electron .",
@@ -19,6 +23,11 @@
   "build": {
     "appId": "com.posenterprise.app",
     "productName": "POS Enterprise System",
+    "publish": {
+      "provider": "github",
+      "owner": "TahaImran1",
+      "repo": "POS_System"
+    },
     "directories": {
       "output": "release"
     },
