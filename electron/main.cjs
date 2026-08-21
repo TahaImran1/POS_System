@@ -37,18 +37,34 @@ ipcMain.handle('save-local-db', async (event, payload) => {
     bytes = payload.bytes;
     customFolder = payload.customFolder;
   }
+  if (!bytes || bytes.length < 100) {
+    console.warn('[Electron Main] Refusing to save invalid SQLite payload (< 100 bytes)');
+    return { success: false, error: 'Invalid SQLite payload' };
+  }
+
+  const buf = Buffer.from(bytes);
+  // Verify SQLite 3 magic header ("SQLite format 3\0")
+  if (buf.length < 16 || buf.toString('utf8', 0, 15) !== 'SQLite format 3') {
+    console.warn('[Electron Main] Refusing to save invalid SQLite header');
+    return { success: false, error: 'Invalid SQLite header' };
+  }
+
   try {
-    // 1. Save to default AppData persistent directory
+    // 1. Save to default AppData persistent directory with atomic write
     const defaultDbPath = path.join(persistentUserData, 'pos.sqlite');
-    await fs.promises.writeFile(defaultDbPath, Buffer.from(bytes));
-    console.log(`[Electron Main] Saved local SQLite DB to AppData: ${defaultDbPath}`);
+    const tempDefaultPath = path.join(persistentUserData, 'pos.sqlite.tmp');
+    await fs.promises.writeFile(tempDefaultPath, buf);
+    await fs.promises.rename(tempDefaultPath, defaultDbPath);
+    console.log(`[Electron Main] Saved local SQLite DB to AppData: ${defaultDbPath} (${buf.length} bytes)`);
 
     // 2. Save directly to custom configured disk folder if specified
     if (customFolder && typeof customFolder === 'string' && customFolder.trim().length > 0) {
       try {
         fs.mkdirSync(customFolder, { recursive: true });
         const customDbPath = path.join(customFolder, 'pos.sqlite');
-        await fs.promises.writeFile(customDbPath, Buffer.from(bytes));
+        const tempCustomPath = path.join(customFolder, 'pos.sqlite.tmp');
+        await fs.promises.writeFile(tempCustomPath, buf);
+        await fs.promises.rename(tempCustomPath, customDbPath);
         console.log(`[Electron Main] Saved local SQLite DB directly to configured disk folder: ${customDbPath}`);
       } catch (errCustom) {
         console.warn(`[Electron Main] Could not save to custom folder (${customFolder}):`, errCustom.message);
@@ -63,23 +79,35 @@ ipcMain.handle('save-local-db', async (event, payload) => {
 
 ipcMain.handle('load-local-db', async (event, customFolder) => {
   try {
+    const isSqliteValid = (buf) => {
+      return buf && buf.length >= 100 && buf.toString('utf8', 0, 15) === 'SQLite format 3';
+    };
+
     // 1. Try loading from custom configured folder if available
     if (customFolder && typeof customFolder === 'string' && customFolder.trim().length > 0) {
       const customDbPath = path.join(customFolder, 'pos.sqlite');
       if (fs.existsSync(customDbPath)) {
         const data = await fs.promises.readFile(customDbPath);
-        console.log(`[Electron Main] Loaded local SQLite DB from custom folder (${data.length} bytes): ${customDbPath}`);
-        return new Uint8Array(data);
+        if (isSqliteValid(data)) {
+          console.log(`[Electron Main] Loaded local SQLite DB from custom folder (${data.length} bytes): ${customDbPath}`);
+          return new Uint8Array(data);
+        } else {
+          console.warn(`[Electron Main] Custom folder pos.sqlite is invalid/corrupted (${data.length} bytes). Ignoring.`);
+        }
       }
     }
     // 2. Fallback to default AppData directory
     const defaultDbPath = path.join(persistentUserData, 'pos.sqlite');
     if (fs.existsSync(defaultDbPath)) {
       const data = await fs.promises.readFile(defaultDbPath);
-      console.log(`[Electron Main] Loaded local SQLite DB from AppData (${data.length} bytes): ${defaultDbPath}`);
-      return new Uint8Array(data);
+      if (isSqliteValid(data)) {
+        console.log(`[Electron Main] Loaded local SQLite DB from AppData (${data.length} bytes): ${defaultDbPath}`);
+        return new Uint8Array(data);
+      } else {
+        console.warn(`[Electron Main] AppData pos.sqlite is invalid/corrupted (${data.length} bytes). Ignoring.`);
+      }
     }
-    console.log('[Electron Main] No pre-existing local SQLite DB file found.');
+    console.log('[Electron Main] No pre-existing valid local SQLite DB file found.');
     return null;
   } catch (err) {
     console.error('[Electron Main] Failed to load local SQLite DB:', err);

@@ -19,17 +19,18 @@ export interface UserAccount {
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     currentUser: null as UserAccount | null,
-    activeRole: 'DEVELOPER' as UserRole, // default active view role
+    activeRole: 'SALESPERSON' as UserRole,
     users: [] as UserAccount[],
-    isAuthenticated: true,
+    isAuthenticated: false,
     showLoginModal: false
   }),
   getters: {
-    isDeveloper: (state) => state.activeRole === 'DEVELOPER',
-    isManager: (state) => state.activeRole === 'MANAGER',
-    isSalesperson: (state) => state.activeRole === 'SALESPERSON',
-    hasManagerPrivileges: (state) => state.activeRole === 'MANAGER' || state.activeRole === 'DEVELOPER',
+    isDeveloper: (state) => state.isAuthenticated && state.activeRole === 'DEVELOPER',
+    isManager: (state) => state.isAuthenticated && state.activeRole === 'MANAGER',
+    isSalesperson: (state) => state.isAuthenticated && state.activeRole === 'SALESPERSON',
+    hasManagerPrivileges: (state) => state.isAuthenticated && (state.activeRole === 'MANAGER' || state.activeRole === 'DEVELOPER'),
     roleLabel: (state) => {
+      if (!state.isAuthenticated) return 'Locked / Login Required'
       switch (state.activeRole) {
         case 'DEVELOPER': return 'Developer / Super Admin'
         case 'MANAGER': return 'Store Manager / Owner'
@@ -43,48 +44,82 @@ export const useAuthStore = defineStore('auth', {
       try {
         const loadedUsers = await db.select().from(schema.users)
         this.users = loadedUsers as UserAccount[]
-        
-        // Default to developer if no currentUser set yet
-        if (!this.currentUser && this.users.length > 0) {
-          const dev = this.users.find(u => u.role === 'DEVELOPER') || this.users[0]
-          this.currentUser = dev
-          this.activeRole = dev.role
-        }
       } catch (e) {
         console.warn('Failed to load users from DB:', e)
       }
     },
     
-    async verifyPinAndLogin(pin: string): Promise<boolean> {
-      const match = this.users.find(u => u.pin === pin)
+    async verifyPinAndLogin(pin: string, targetUserId?: string): Promise<{ success: boolean; user?: UserAccount; error?: string }> {
+      const cleanPin = pin.trim()
+      if (!cleanPin) {
+        return { success: false, error: 'Please enter a PIN.' }
+      }
+
+      let match: UserAccount | undefined
+      if (targetUserId) {
+        match = this.users.find(u => u.user_id === targetUserId && u.pin === cleanPin)
+        if (!match) {
+          return { success: false, error: 'Incorrect PIN for the selected user account.' }
+        }
+      } else {
+        match = this.users.find(u => u.pin === cleanPin)
+        if (!match) {
+          return { success: false, error: 'Invalid PIN. No matching user account found.' }
+        }
+      }
+
       if (match) {
         this.currentUser = match
         this.activeRole = match.role
         this.isAuthenticated = true
         this.showLoginModal = false
-        return true
+        return { success: true, user: match }
       }
-      return false
+
+      return { success: false, error: 'Authentication failed.' }
     },
 
     verifyManagerPin(pin: string): boolean {
-      const match = this.users.find(u => (u.role === 'MANAGER' || u.role === 'DEVELOPER') && u.pin === pin)
+      const match = this.users.find(u => (u.role === 'MANAGER' || u.role === 'DEVELOPER') && u.pin === pin.trim())
       return !!match
     },
 
-    switchRole(role: UserRole) {
-      this.activeRole = role
-    },
+    async addUser(user: Omit<UserAccount, 'user_id' | 'created_at'>): Promise<UserAccount> {
+      const cleanUsername = user.username.trim()
+      
+      // Ensure local user cache is populated
+      if (this.users.length === 0) {
+        await this.loadUsers()
+      }
 
-    async addUser(user: Omit<UserAccount, 'user_id' | 'created_at'>) {
+      // Check if username already exists in local cache or DB
+      const existing = this.users.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase())
+      if (existing) {
+        await this.updateUser(existing.user_id, {
+          name: user.name,
+          pin: user.pin,
+          role: user.role,
+          node_id: user.node_id
+        })
+        return {
+          ...existing,
+          name: user.name,
+          pin: user.pin,
+          role: user.role,
+          node_id: user.node_id
+        }
+      }
+
       const newUser: UserAccount = {
         ...user,
+        username: cleanUsername,
         user_id: uuidv4(),
         created_at: Date.now()
       }
       try {
         await db.insert(schema.users).values(newUser as any)
         this.users.push(newUser)
+        return newUser
       } catch (e) {
         console.error('Failed to insert user:', e)
         throw e

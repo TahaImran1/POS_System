@@ -55,6 +55,10 @@ onMounted(async () => {
         currentAppView.value = 'portal'
       }
     }
+
+    if (nodeConfigStore.isSetupCompleted && !authStore.isAuthenticated) {
+      authStore.showLoginModal = true
+    }
     
     isReady.value = true
   } catch (err: any) {
@@ -159,9 +163,9 @@ function handleRoleChanged() {
       </div>
     </div>
 
-    <!-- Login Modal -->
+    <!-- Login Modal / Lock Screen -->
     <LoginModal 
-      v-if="authStore.showLoginModal" 
+      v-if="authStore.showLoginModal || (!authStore.isAuthenticated && nodeConfigStore.isSetupCompleted)" 
       @close="authStore.showLoginModal = false" 
       @role-changed="handleRoleChanged"
     />

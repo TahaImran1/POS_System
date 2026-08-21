@@ -48,6 +48,14 @@ const handleAction = (act: string) => {
         </button>
 
         <button 
+          @click="handleAction('switch-user')" 
+          class="w-full text-left p-3 hover:bg-amber-50 flex items-center gap-3 text-sm font-semibold text-gray-800 rounded-lg cursor-pointer border border-amber-100"
+        >
+          <i class="fas fa-key text-amber-600 text-base"></i>
+          <span>🔑 Switch Cashier / User</span>
+        </button>
+
+        <button 
           v-if="authStore.hasManagerPrivileges"
           @click="handleAction('create-product')" 
           class="w-full text-left p-3 hover:bg-purple-50 flex items-center gap-3 text-sm font-bold text-[#714B67] rounded-lg border border-purple-100 cursor-pointer"

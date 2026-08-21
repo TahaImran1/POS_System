@@ -243,7 +243,9 @@ const handleBarcodeSearch = () => {
 }
 
 const handleMenuAction = (act: string) => {
-  if (act === 'create-product') {
+  if (act === 'switch-user') {
+    authStore.showLoginModal = true
+  } else if (act === 'create-product') {
     isCreateProductOpen.value = true
   } else if (act === 'orders') {
     currentView.value = 'orders'

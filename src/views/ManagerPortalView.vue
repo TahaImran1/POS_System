@@ -13,8 +13,10 @@ import { desc } from 'drizzle-orm'
 import type { Product } from '../stores/useProductStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
 import { useCartStore } from '../stores/useCartStore'
+import { useAuthStore, type UserRole, type UserAccount } from '../stores/useAuthStore'
 
 const settingsStore = useSettingsStore()
+const authStore = useAuthStore()
 
 const emit = defineEmits(['open-pos'])
 const productStore = useProductStore()
@@ -22,7 +24,7 @@ const masterDbStore = useMasterDbStore()
 const cartStore = useCartStore()
 const toast = useToast()
 
-const activeTab = ref<'products' | 'combos' | 'taxes' | 'inventory' | 'reports'>('products')
+const activeTab = ref<'products' | 'combos' | 'taxes' | 'inventory' | 'reports' | 'users'>('products')
 const showCreateProductModal = ref(false)
 const editingProduct = ref<Product | null>(null)
 
@@ -68,6 +70,8 @@ watch(activeTab, async (newTab) => {
     await loadSalesReport()
   } else if (newTab === 'inventory' || newTab === 'products') {
     await productStore.loadFromDb()
+  } else if (newTab === 'users') {
+    await authStore.loadUsers()
   }
 })
 
@@ -283,7 +287,21 @@ const loadItemWiseReport = async () => {
   }
 }
 
-function printItemWiseReport() {
+const showPdfReportModal = ref(false)
+
+function openPdfReportPreview() {
+  if (reportSubTab.value === 'item_wise' && itemWiseReportData.value.length === 0) {
+    toast.warning('No sales data available for the selected date range to preview.')
+    return
+  }
+  if (reportSubTab.value === 'transactions' && salesReportData.value.length === 0) {
+    toast.warning('No transaction records available for the selected date range to preview.')
+    return
+  }
+  showPdfReportModal.value = true
+}
+
+function handleExecutePrint() {
   window.print()
 }
 
@@ -426,6 +444,114 @@ const handleAddBomItem = async () => {
   await loadBomRecipes()
 }
 
+// Staff & Salesperson Management Methods
+const managerStaffUsers = computed(() => authStore.users.filter(u => u.role !== 'DEVELOPER'))
+const showStaffModal = ref(false)
+const editingStaffId = ref<string | null>(null)
+const staffForm = ref<{
+  name: string
+  username: string
+  pin: string
+  role: UserRole
+  node_id?: string
+}>({
+  name: '',
+  username: '',
+  pin: '',
+  role: 'SALESPERSON',
+  node_id: ''
+})
+
+const generateRandomStaffPin = () => {
+  staffForm.value.pin = Math.floor(1000 + Math.random() * 9000).toString()
+}
+
+const handleOpenCreateStaff = () => {
+  editingStaffId.value = null
+  staffForm.value = {
+    name: '',
+    username: '',
+    pin: Math.floor(1000 + Math.random() * 9000).toString(),
+    role: 'SALESPERSON',
+    node_id: masterDbStore.nodes[0]?.node_id || ''
+  }
+  showStaffModal.value = true
+}
+
+const handleEditStaff = (user: UserAccount) => {
+  editingStaffId.value = user.user_id
+  staffForm.value = {
+    name: user.name,
+    username: user.username,
+    pin: user.pin,
+    role: user.role,
+    node_id: user.node_id || masterDbStore.nodes[0]?.node_id || ''
+  }
+  showStaffModal.value = true
+}
+
+const handleSaveStaff = async () => {
+  const name = staffForm.value.name.trim()
+  const username = staffForm.value.username.trim().toLowerCase()
+  const pin = staffForm.value.pin.trim()
+
+  if (!name || !username || !pin) {
+    toast.warning('Please enter Name, Username, and PIN.')
+    return
+  }
+
+  if (pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin)) {
+    toast.warning('PIN must be a 4 to 6 digit numeric code.')
+    return
+  }
+
+  try {
+    if (editingStaffId.value) {
+      await authStore.updateUser(editingStaffId.value, {
+        name,
+        username,
+        pin,
+        role: staffForm.value.role,
+        node_id: staffForm.value.node_id
+      })
+      toast.success(`Updated staff account: ${name}`)
+    } else {
+      await authStore.addUser({
+        name,
+        username,
+        pin,
+        role: staffForm.value.role,
+        node_id: staffForm.value.node_id
+      })
+      toast.success(`Created salesperson account: ${name} (PIN: ${pin})`)
+    }
+    showStaffModal.value = false
+    editingStaffId.value = null
+    await authStore.loadUsers()
+  } catch (err: any) {
+    toast.error(`Failed to save staff account: ${err.message}`)
+  }
+}
+
+const handleDeleteStaff = async (user: UserAccount) => {
+  if (user.role === 'DEVELOPER') {
+    toast.warning('Developer / Super Admin accounts cannot be deleted here.')
+    return
+  }
+  if (user.user_id === authStore.currentUser?.user_id) {
+    toast.warning('You cannot delete your own currently active account.')
+    return
+  }
+  if (confirm(`Are you sure you want to delete staff account "${user.name}"? This action cannot be undone.`)) {
+    try {
+      await authStore.deleteUser(user.user_id)
+      toast.success(`Deleted staff member: ${user.name}`)
+    } catch (err: any) {
+      toast.error(`Failed to delete user: ${err.message}`)
+    }
+  }
+}
+
 const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
 </script>
 
@@ -493,6 +619,15 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
       >
         <i class="fas fa-[#714B67] fa-chart-bar"></i>
         <span>Sales Reports & Master DB</span>
+      </button>
+
+      <button 
+        @click="activeTab = 'users'" 
+        :class="[activeTab === 'users' ? 'border-[#714B67] text-[#714B67] border-b-2 font-bold' : 'text-gray-600 hover:text-gray-900']"
+        class="py-3 px-2 flex items-center gap-2 transition-colors cursor-pointer"
+      >
+        <i class="fas fa-users text-[#714B67]"></i>
+        <span>Staff & Salespersons</span>
       </button>
     </div>
 
@@ -911,11 +1046,11 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
               <span>Filter Report</span>
             </button>
             <button 
-              @click="printItemWiseReport" 
-              class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs font-bold rounded-lg border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"
+              @click="openPdfReportPreview" 
+              class="px-3.5 py-1.5 bg-[#714B67] hover:bg-[#5a3a52] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
-              <i class="fas fa-print"></i>
-              <span>Print</span>
+              <i class="fas fa-file-pdf text-amber-300"></i>
+              <span>Preview & Print PDF</span>
             </button>
             <button 
               @click="exportItemWiseCsv" 
@@ -1076,6 +1211,143 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
         </div>
       </div>
 
+      <!-- TAB 6: STAFF & SALESPERSONS MANAGEMENT -->
+      <div v-if="activeTab === 'users'" class="space-y-5">
+        <!-- Top Stats Row -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Store Staff</div>
+              <div class="text-2xl font-black text-gray-900 mt-1">{{ managerStaffUsers.length }}</div>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-purple-50 text-[#714B67] flex items-center justify-center text-xl font-bold border border-purple-100">
+              <i class="fas fa-users"></i>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Salespersons / Cashiers</div>
+              <div class="text-2xl font-black text-emerald-600 mt-1">
+                {{ managerStaffUsers.filter(u => u.role === 'SALESPERSON').length }}
+              </div>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold border border-emerald-100">
+              <i class="fas fa-cash-register"></i>
+            </div>
+          </div>
+
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
+            <div>
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Store Managers & Owners</div>
+              <div class="text-2xl font-black text-indigo-600 mt-1">
+                {{ managerStaffUsers.filter(u => u.role === 'MANAGER').length }}
+              </div>
+            </div>
+            <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold border border-indigo-100">
+              <i class="fas fa-user-tie"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Staff List Card -->
+        <div class="bg-white p-6 rounded-xl shadow-xs border border-gray-200 space-y-4">
+          <div class="flex justify-between items-center border-b border-gray-100 pb-4">
+            <div>
+              <h3 class="font-bold text-base text-gray-900">Staff & Cashier Credentials</h3>
+              <p class="text-xs text-gray-500">Create and manage cashier accounts, set secret PINs, and grant store permissions.</p>
+            </div>
+            <button 
+              @click="handleOpenCreateStaff" 
+              class="px-4 py-2 bg-[#714B67] hover:bg-[#5a3a52] text-white font-bold text-xs rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <i class="fas fa-user-plus"></i>
+              <span>Add New Salesperson</span>
+            </button>
+          </div>
+
+          <!-- Staff Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold uppercase text-[10px] tracking-wider">
+                  <th class="p-3">Staff Member</th>
+                  <th class="p-3">Login Username</th>
+                  <th class="p-3">Assigned Role</th>
+                  <th class="p-3">Terminal / Branch</th>
+                  <th class="p-3">Login PIN</th>
+                  <th class="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr v-if="managerStaffUsers.length === 0">
+                  <td colspan="6" class="p-8 text-center text-gray-400 font-medium">
+                    No staff accounts found. Click "Add New Salesperson" above to create one.
+                  </td>
+                </tr>
+                <tr v-for="u in managerStaffUsers" :key="u.user_id" class="hover:bg-gray-50/80 transition-colors">
+                  <td class="p-3">
+                    <div class="flex items-center gap-3">
+                      <div 
+                        :class="[
+                          u.role === 'MANAGER' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
+                        ]"
+                        class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 border border-black/5"
+                      >
+                        <i v-if="u.role === 'MANAGER'" class="fas fa-user-tie"></i>
+                        <i v-else class="fas fa-cash-register"></i>
+                      </div>
+                      <div>
+                        <div class="font-bold text-gray-900 text-xs">{{ u.name }}</div>
+                        <div class="text-[10px] text-gray-400">ID: {{ u.user_id?.substr(0, 8) }}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="p-3 font-mono font-bold text-gray-700 text-xs">@{{ u.username }}</td>
+                  <td class="p-3">
+                    <span 
+                      :class="[
+                        u.role === 'MANAGER' ? 'bg-indigo-100 text-indigo-800 border-indigo-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                      ]"
+                      class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border"
+                    >
+                      {{ u.role }}
+                    </span>
+                  </td>
+                  <td class="p-3 text-gray-600 text-xs">
+                    {{ u.node_id ? (masterDbStore.nodes.find(n => n.node_id === u.node_id)?.location_name || 'Main Register') : 'All Terminals' }}
+                  </td>
+                  <td class="p-3 font-mono font-bold text-gray-600 text-xs">
+                    <span class="bg-gray-100 px-2 py-1 rounded border border-gray-200">
+                      {{ u.pin ? `${u.pin.slice(0, 1)}•••${u.pin.slice(-1)}` : '••••' }}
+                    </span>
+                  </td>
+                  <td class="p-3 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                      <button 
+                        @click="handleEditStaff(u)"
+                        class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
+                        title="Edit Account or Reset PIN"
+                      >
+                        <i class="fas fa-edit text-xs"></i>
+                        <span>Edit / PIN</span>
+                      </button>
+                      <button 
+                        @click="handleDeleteStaff(u)"
+                        class="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                        title="Delete Staff Account"
+                      >
+                        <i class="fas fa-trash-alt text-xs"></i>
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <!-- Modals -->
@@ -1084,5 +1356,337 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
       :editProduct="editingProduct"
       @close="handleModalClose" 
     />
+
+    <!-- Create / Edit Staff Modal -->
+    <div v-if="showStaffModal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+        <!-- Modal Header -->
+        <div class="bg-[#714B67] text-white px-6 py-4 flex justify-between items-center shadow-xs">
+          <div class="flex items-center gap-2.5">
+            <i class="fas fa-user-shield text-[#e0a96d] text-lg"></i>
+            <h3 class="font-bold text-base">{{ editingStaffId ? 'Edit Staff / Reset PIN' : 'Create New Salesperson / Staff' }}</h3>
+          </div>
+          <button @click="showStaffModal = false" class="text-white/70 hover:text-white transition-colors cursor-pointer">
+            <i class="fas fa-times text-base"></i>
+          </button>
+        </div>
+
+        <!-- Form Body -->
+        <div class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Full Staff Name *</label>
+            <input 
+              v-model="staffForm.name" 
+              type="text" 
+              placeholder="e.g. Bilal Ahmed (Cashier 1)" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Username (Login ID) *</label>
+            <input 
+              v-model="staffForm.username" 
+              type="text" 
+              placeholder="e.g. bilal or cashier1" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Assigned Role *</label>
+            <select 
+              v-model="staffForm.role" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67] bg-white"
+            >
+              <option value="SALESPERSON">🛒 Salesperson / Cashier (POS Register & Orders)</option>
+              <option value="MANAGER">👔 Store Manager (Products, Combos, Taxes, Staff & Reports)</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="flex justify-between items-center mb-1">
+              <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Secret Login PIN (4-6 Digits) *</label>
+              <button 
+                @click="generateRandomStaffPin" 
+                type="button" 
+                class="text-[11px] font-bold text-[#714B67] hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <i class="fas fa-dice"></i> Auto-Generate
+              </button>
+            </div>
+            <input 
+              v-model="staffForm.pin" 
+              type="text" 
+              maxlength="6"
+              placeholder="e.g. 4829" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono font-bold tracking-widest text-[#714B67] focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+            />
+            <p class="text-[11px] text-gray-400 mt-1">Cashiers will type this PIN on startup or when switching users.</p>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+          <button 
+            @click="showStaffModal = false" 
+            class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button 
+            @click="handleSaveStaff" 
+            class="px-5 py-2 bg-[#714B67] hover:bg-[#5a3a52] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+          >
+            <i class="fas fa-save"></i>
+            <span>{{ editingStaffId ? 'Update Staff Member' : 'Create Staff Member' }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDF Report Document Preview & Print Modal -->
+    <div v-if="showPdfReportModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex flex-col p-4 md:p-6 overflow-hidden animate-in fade-in duration-200">
+      <!-- Modal Top Toolbar -->
+      <div class="w-full max-w-5xl mx-auto mb-4 bg-slate-900/90 text-white px-5 py-3 rounded-2xl border border-white/10 flex justify-between items-center shadow-xl no-print">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center border border-purple-500/30">
+            <i class="fas fa-file-pdf text-lg"></i>
+          </div>
+          <div>
+            <h3 class="font-bold text-sm leading-tight text-white">
+              {{ reportSubTab === 'item_wise' ? 'Item-Wise Sales & Tax Audit Report' : 'Sales Transactions Ledger' }}
+            </h3>
+            <p class="text-[11px] text-gray-400">Previewing document before sending to printer or saving as PDF</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5">
+          <button 
+            @click="handleExecutePrint" 
+            class="px-4 py-2 bg-[#714B67] hover:bg-[#5c3d54] text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+          >
+            <i class="fas fa-print text-amber-300"></i>
+            <span>Print Report</span>
+          </button>
+
+          <button 
+            @click="showPdfReportModal = false" 
+            class="px-3 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+          >
+            <i class="fas fa-times"></i>
+            <span>Close Preview</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Printable A4 Document Sheet Canvas -->
+      <div class="flex-1 overflow-y-auto flex justify-center p-2">
+        <div 
+          id="printable-pdf-document" 
+          class="w-full max-w-4xl bg-white text-gray-900 rounded-xl shadow-2xl p-8 md:p-12 border border-gray-200 min-h-[900px] flex flex-col justify-between font-sans"
+        >
+          <!-- Document Header -->
+          <div>
+            <div class="flex justify-between items-start border-b-2 border-purple-900 pb-5 mb-6">
+              <div>
+                <h1 class="text-2xl font-black text-[#714B67] tracking-tight uppercase">
+                  {{ settingsStore.storeName || 'POS ENTERPRISE SYSTEM' }}
+                </h1>
+                <div class="text-xs text-gray-500 mt-1 font-semibold">
+                  Official Sales, Tax & Revenue Accounting Report
+                </div>
+                <div class="text-[11px] text-gray-400 mt-0.5">
+                  Generated On: {{ new Date().toLocaleString('en-US', { dateStyle: 'full', timeStyle: 'short' }) }}
+                </div>
+              </div>
+
+              <div class="text-right">
+                <span class="inline-block px-3 py-1 bg-purple-100 text-[#714B67] font-black text-xs uppercase rounded-md tracking-wider border border-purple-200">
+                  {{ reportSubTab === 'item_wise' ? 'ITEM-WISE TAX AUDIT' : 'TRANSACTION LOG' }}
+                </span>
+                <div class="text-xs font-mono text-gray-600 mt-2">
+                  Period: <span class="font-bold text-gray-900">{{ reportFromDate }}</span> to <span class="font-bold text-gray-900">{{ reportToDate }}</span>
+                </div>
+                <div class="text-[11px] text-gray-500 mt-0.5">
+                  Generated By: <span class="font-bold text-gray-800">{{ authStore.currentUser?.name || 'Manager' }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- KPI Cards Overview -->
+            <div class="grid grid-cols-4 gap-3 mb-6">
+              <div class="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                <div class="text-[10px] font-bold text-gray-500 uppercase">Untaxed Base</div>
+                <div class="text-base font-black text-gray-900 mt-0.5">
+                  {{ formatCurrency(itemWiseSummary.total_untaxed_amount) }}
+                </div>
+              </div>
+              <div class="p-3 bg-indigo-50/50 border border-indigo-100 rounded-lg">
+                <div class="text-[10px] font-bold text-indigo-700 uppercase">Item Taxes</div>
+                <div class="text-base font-black text-indigo-700 mt-0.5">
+                  {{ formatCurrency(itemWiseSummary.total_item_tax) }}
+                </div>
+              </div>
+              <div class="p-3 bg-purple-50/50 border border-purple-100 rounded-lg">
+                <div class="text-[10px] font-bold text-purple-700 uppercase">Bill / Order Taxes</div>
+                <div class="text-base font-black text-purple-700 mt-0.5">
+                  {{ formatCurrency(itemWiseSummary.total_bill_tax) }}
+                </div>
+              </div>
+              <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <div class="text-[10px] font-bold text-emerald-800 uppercase">Total Net Revenue</div>
+                <div class="text-base font-black text-emerald-700 mt-0.5">
+                  {{ formatCurrency(itemWiseSummary.grand_total) }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Content Table: Item-Wise Report -->
+            <div v-if="reportSubTab === 'item_wise'" class="mb-6">
+              <table class="w-full text-left text-xs border-collapse border border-gray-300">
+                <thead>
+                  <tr class="bg-gray-100 border-b border-gray-300 text-gray-800 font-bold uppercase text-[10px] tracking-wider">
+                    <th class="p-2.5 border-r border-gray-300">Product Name</th>
+                    <th class="p-2.5 border-r border-gray-300 text-center">Category</th>
+                    <th class="p-2.5 border-r border-gray-300 text-center">Tax Rate</th>
+                    <th class="p-2.5 border-r border-gray-300 text-center">Qty Sold</th>
+                    <th class="p-2.5 border-r border-gray-300 text-right">Unit Excl. Tax</th>
+                    <th class="p-2.5 border-r border-gray-300 text-right">Tax Total</th>
+                    <th class="p-2.5 text-right">Gross Total</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                  <tr v-for="r in itemWiseReportData" :key="r.product_id" class="border-b border-gray-200">
+                    <td class="p-2.5 border-r border-gray-200">
+                      <div class="font-bold text-gray-900">{{ r.product_name }}</div>
+                      <div class="text-[9px] text-gray-500 font-mono">SKU: {{ r.barcode || 'N/A' }}</div>
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-center uppercase text-[10px] font-bold text-gray-600">
+                      {{ r.category }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-center font-bold text-purple-900 text-[11px]">
+                      {{ r.tax_rate_pct > 0 ? `${r.tax_rate_pct.toFixed(1)}%` : '0%' }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-center font-mono font-bold text-gray-900">
+                      {{ r.total_quantity }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-right font-mono text-gray-700">
+                      {{ formatCurrency(r.unit_price_excl_tax) }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-right font-mono font-bold text-indigo-700">
+                      {{ formatCurrency(r.total_tax_amount) }}
+                    </td>
+                    <td class="p-2.5 text-right font-mono font-black text-gray-900">
+                      {{ formatCurrency(r.total_amount_incl_tax) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Content Table: Transaction Log -->
+            <div v-else class="mb-6">
+              <table class="w-full text-left text-xs border-collapse border border-gray-300">
+                <thead>
+                  <tr class="bg-gray-100 border-b border-gray-300 text-gray-800 font-bold uppercase text-[10px] tracking-wider">
+                    <th class="p-2.5 border-r border-gray-300">Receipt #</th>
+                    <th class="p-2.5 border-r border-gray-300">Date & Time</th>
+                    <th class="p-2.5 border-r border-gray-300">Method</th>
+                    <th class="p-2.5 border-r border-gray-300 text-right">Subtotal</th>
+                    <th class="p-2.5 border-r border-gray-300 text-right">Tax Total</th>
+                    <th class="p-2.5 text-right">Net Total</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                  <tr v-for="s in salesReportData" :key="s.sale_id" class="border-b border-gray-200">
+                    <td class="p-2.5 border-r border-gray-200 font-mono font-bold text-gray-900">
+                      POS-{{ s.sale_id?.substr(0, 8).toUpperCase() }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-gray-600">
+                      {{ s.created_at ? new Date(s.created_at).toLocaleString() : 'N/A' }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 font-bold uppercase text-[10px] text-purple-900">
+                      {{ s.payment_method }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-right font-mono text-gray-700">
+                      {{ formatCurrency(Number(s.subtotal || 0)) }}
+                    </td>
+                    <td class="p-2.5 border-r border-gray-200 text-right font-mono font-bold text-indigo-700">
+                      {{ formatCurrency(Number(s.tax_total || 0)) }}
+                    </td>
+                    <td class="p-2.5 text-right font-mono font-black text-gray-900">
+                      {{ formatCurrency(Number(s.net_total || 0)) }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Tax Breakdown Summary Card -->
+            <div class="flex justify-end mb-8">
+              <div class="w-80 bg-gray-50 border border-gray-300 rounded-lg p-4 font-mono text-xs space-y-2">
+                <div class="font-bold text-gray-900 border-b border-gray-300 pb-1.5 uppercase font-sans">
+                  Tax Calculation Breakdown
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-gray-600 font-sans">Untaxed Subtotal:</span>
+                  <span class="font-bold">{{ formatCurrency(itemWiseSummary.total_untaxed_amount) }}</span>
+                </div>
+                <div class="flex justify-between text-indigo-900">
+                  <span class="text-gray-600 font-sans">Combined Taxes ({{ itemWiseSummary.effective_tax_rate.toFixed(1) }}%):</span>
+                  <span class="font-bold">{{ formatCurrency(itemWiseSummary.total_tax_amount) }}</span>
+                </div>
+                <div class="flex justify-between text-emerald-950 font-black border-t-2 border-gray-400 pt-1.5 text-sm font-sans">
+                  <span>Grand Total:</span>
+                  <span class="font-mono text-emerald-700">{{ formatCurrency(itemWiseSummary.grand_total) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Document Footer / Signatures -->
+          <div class="border-t border-gray-300 pt-6 mt-6">
+            <div class="grid grid-cols-2 gap-12 text-xs">
+              <div>
+                <div class="text-gray-500 font-medium text-[11px]">System Verification:</div>
+                <div class="font-mono text-[10px] text-gray-400 mt-1">SEC-AUDIT-{{ Date.now().toString(36).toUpperCase() }} | Verified Clean</div>
+              </div>
+              <div class="text-right">
+                <div class="border-b border-gray-400 pb-8 mb-1"></div>
+                <div class="font-bold text-gray-800 text-xs">Authorized Store Manager Signature</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-pdf-document, #printable-pdf-document * {
+    visibility: visible;
+  }
+  #printable-pdf-document {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 24px !important;
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+</style>

@@ -681,7 +681,9 @@ async function handleNext() {
 
     // 3. Save Accounts to SQLite Database
     try {
-      // Save Developer Account
+      await authStore.loadUsers()
+
+      // Save / Update Developer Account
       await authStore.addUser({
         username: devForm.value.username,
         name: devForm.value.name,
@@ -689,15 +691,15 @@ async function handleNext() {
         role: 'DEVELOPER'
       })
 
-      // Save Manager Account
-      await authStore.addUser({
+      // Save / Update Manager Account
+      const savedManager = await authStore.addUser({
         username: managerForm.value.username,
         name: managerForm.value.name,
         pin: managerForm.value.pin,
         role: 'MANAGER'
       })
 
-      // Save Salesperson Accounts created by Manager
+      // Save / Update Salesperson Accounts created by Manager
       for (const sp of salespersons.value) {
         if (sp.name && sp.username && sp.pin) {
           await authStore.addUser({
@@ -708,19 +710,24 @@ async function handleNext() {
           })
         }
       }
+
+      // Set logged-in Manager Account by default
+      if (savedManager) {
+        authStore.currentUser = savedManager
+      } else {
+        authStore.currentUser = {
+          user_id: `mgr-${Date.now()}`,
+          username: managerForm.value.username,
+          name: managerForm.value.name,
+          pin: managerForm.value.pin,
+          role: 'MANAGER'
+        }
+      }
+      authStore.activeRole = 'MANAGER'
+      authStore.isAuthenticated = true
     } catch (e) {
       console.warn('User account creation handled:', e)
     }
-
-    // Set logged-in Manager Account by default
-    authStore.currentUser = {
-      user_id: `mgr-${Date.now()}`,
-      username: managerForm.value.username,
-      name: managerForm.value.name,
-      pin: managerForm.value.pin,
-      role: 'MANAGER'
-    }
-    authStore.activeRole = 'MANAGER'
 
     // 4. Mark Setup as Completed
     nodeConfigStore.completeSetup('STANDALONE_POS', {

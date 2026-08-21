@@ -74,12 +74,23 @@ export function getCustomDbFolder(): string | null {
   return null
 }
 
+// Validate if a byte buffer contains a genuine SQLite 3 database header
+export function isValidSqliteBuffer(bytes: Uint8Array | null | undefined): boolean {
+  if (!bytes || bytes.length < 100) return false
+  // Standard SQLite 3 Magic Header: "SQLite format 3\0"
+  const magic = [0x53, 0x51, 0x4c, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6f, 0x72, 0x6d, 0x61, 0x74, 0x20, 0x33, 0x00]
+  for (let i = 0; i < magic.length; i++) {
+    if (bytes[i] !== magic[i]) return false
+  }
+  return true
+}
+
 // Auto-save function triggered after every write query
 export async function autoSave() {
   if (!opfsDb || !sqlite3) return
   try {
     const byteArray = sqlite3.capi.sqlite3_js_db_export(opfsDb.pointer)
-    if (byteArray && byteArray.length > 0) {
+    if (isValidSqliteBuffer(byteArray)) {
       const customFolder = getCustomDbFolder()
       // 1. If in Electron, save to host disk (both AppData & custom configured folder)
       if ((window as any).electronAPI && (window as any).electronAPI.saveLocalDb) {
@@ -101,8 +112,8 @@ export async function saveDbToCustomFolder(targetFolder?: string) {
   }
   try {
     const byteArray = sqlite3.capi.sqlite3_js_db_export(opfsDb.pointer)
-    if (!byteArray || byteArray.length === 0) {
-      toast.error('Failed to export database bytes.')
+    if (!isValidSqliteBuffer(byteArray)) {
+      toast.error('Failed to export database bytes: invalid SQLite data.')
       return false
     }
     const folder = targetFolder || getCustomDbFolder()
@@ -141,6 +152,12 @@ export async function initDb() {
       console.log('[DB] IndexedDB loadFromIndexedDB result:', loadedBytes ? `${loadedBytes.length} bytes` : 'null')
     }
 
+    // Discard any corrupted non-SQLite payload
+    if (loadedBytes && !isValidSqliteBuffer(loadedBytes)) {
+      console.warn('[DB] Loaded bytes is not a valid SQLite database header (< 100 bytes or corrupt). Discarding.')
+      loadedBytes = null
+    }
+
     sqlite3 = await sqlite3InitModule() as any
     console.log('[DB] SQLite WASM initialized. OPFS available:', !!sqlite3.opfs)
 
@@ -151,7 +168,30 @@ export async function initDb() {
       // (requires COOP+COEP headers — injected by Electron main.cjs)
       // ---------------------------------------------------------------
       console.log('[DB] Using OPFS persistent storage.')
-      opfsDb = new sqlite3.oo1.OpfsDb('/pos.sqlite')
+      
+      try {
+        opfsDb = new sqlite3.oo1.OpfsDb('/pos.sqlite')
+      } catch (opfsErr: any) {
+        console.warn('[DB] Failed to open existing OPFS DB file (corrupt or 0-byte). Purging and re-creating clean DB...', opfsErr)
+        try {
+          if (sqlite3.opfs && typeof sqlite3.opfs.unlink === 'function') {
+            sqlite3.opfs.unlink('/pos.sqlite')
+          } else if (navigator.storage && navigator.storage.getDirectory) {
+            const root = await navigator.storage.getDirectory()
+            await root.removeEntry('pos.sqlite', { recursive: true }).catch(() => {})
+          }
+        } catch (unlinkErr) {
+          console.warn('[DB] Could not unlink OPFS file:', unlinkErr)
+        }
+
+        try {
+          opfsDb = new sqlite3.oo1.OpfsDb('/pos.sqlite')
+          console.log('[DB] ✅ Fresh OPFS DB initialized.')
+        } catch (fallbackErr) {
+          console.warn('[DB] OPFS initialization failed after purge. Falling back to in-memory DB:', fallbackErr)
+          opfsDb = new sqlite3.oo1.DB(':memory:', 'c')
+        }
+      }
 
       // Check if OPFS already has data (i.e., not a cold start)
       let tableCount = 0
@@ -162,7 +202,7 @@ export async function initDb() {
         console.warn('[DB] Could not read sqlite_master from OPFS DB:', err)
       }
 
-      if (tableCount === 0 && loadedBytes && loadedBytes.length > 0) {
+      if (tableCount === 0 && loadedBytes && isValidSqliteBuffer(loadedBytes)) {
         // Cold start: OPFS is empty — import the saved bytes to restore data
         console.log('[DB] OPFS is empty — importing saved bytes to restore data...')
         const ok = await tryImportBytes(loadedBytes)
@@ -187,7 +227,7 @@ export async function initDb() {
       console.warn('[DB] OPFS is NOT available. Using in-memory DB (data must be restored from saved bytes every reload).')
       opfsDb = new sqlite3.oo1.DB(':memory:', 'c')
 
-      if (loadedBytes && loadedBytes.length > 0) {
+      if (loadedBytes && isValidSqliteBuffer(loadedBytes)) {
         console.log(`[DB] Restoring in-memory DB from ${loadedBytes.length} saved bytes...`)
         const ok = await tryImportBytes(loadedBytes)
         if (ok) {
@@ -196,10 +236,9 @@ export async function initDb() {
           console.log(`[DB] ✅ In-memory restore succeeded (${productCount} products found).`)
         } else {
           console.error('[DB] ❌ In-memory restore FAILED — all data will appear empty after reload.')
-          console.error('[DB] Enable OPFS via COOP+COEP headers in Electron main.cjs to fix persistent storage.')
         }
       } else {
-        console.log('[DB] No saved bytes available — starting with a fresh database.')
+        console.log('[DB] No valid saved bytes available — starting with a fresh database.')
       }
     }
 
@@ -262,8 +301,7 @@ export async function initDb() {
         if (method === 'get') return { rows: rows[0] }
         return { rows }
       } catch (e: any) {
-        console.error('[DB] Query error:', e, sql, params)
-        alert('DB Query Error: ' + e.message + '\nSQL: ' + sql.substring(0, 100))
+        console.error('[DB] Query execution error:', e, 'SQL:', sql, 'Params:', params)
         throw e
       }
     }, { schema })
@@ -282,6 +320,11 @@ export async function initDb() {
  * (C-level API) as a fallback. Returns true if any method succeeded.
  */
 async function tryImportBytes(bytes: Uint8Array): Promise<boolean> {
+  if (!isValidSqliteBuffer(bytes)) {
+    console.warn('[DB] tryImportBytes: payload is not a valid SQLite database header. Aborting import.')
+    return false
+  }
+
   // Method 1: sqlite3_js_db_import (high-level WASM helper)
   try {
     if (typeof sqlite3.capi.sqlite3_js_db_import === 'function') {
