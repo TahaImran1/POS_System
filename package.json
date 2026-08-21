@@ -1,6 +1,6 @@
 {
   "name": "pos_system",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Enterprise Universal Multi-Branch Point of Sale System",
   "main": "electron/main.cjs",
   "type": "module",
