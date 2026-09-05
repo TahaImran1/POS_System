@@ -4,6 +4,8 @@ import * as schema from '../db/schema'
 import { eq } from 'drizzle-orm'
 import { calculateTaxesForProduct } from '../services/taxService'
 
+import { useSettingsStore } from './useSettingsStore'
+
 export interface Category {
   id: string
   name: string
@@ -18,12 +20,14 @@ export interface Product {
   name: string
   category: string
   price: number
+  cost_price?: number
   type: string
   stock?: number
   taxGroupId: string
-  image: string
-  description: string
+  image?: string
+  description?: string
   taxAmount: number
+  uom?: string
 }
 
 export const useProductStore = defineStore('product', {
@@ -36,8 +40,17 @@ export const useProductStore = defineStore('product', {
   }),
   getters: {
     filteredProducts: (state) => {
-      if (state.selectedCategoryId === 'all') return state.products
-      return state.products.filter(p => p.category === state.selectedCategoryId)
+      const settingsStore = useSettingsStore()
+      let list = state.selectedCategoryId === 'all'
+        ? state.products
+        : state.products.filter(p => p.category === state.selectedCategoryId)
+
+      // Raw products (RAW_MATERIAL) are strictly for restaurant POS (recipes/BOM), not store POS
+      if (settingsStore.posMode === 'retail') {
+        list = list.filter(p => p.type !== 'RAW_MATERIAL')
+      }
+
+      return list
     }
   },
   actions: {
@@ -88,6 +101,7 @@ export const useProductStore = defineStore('product', {
                 name: r.name,
                 category: productCategory,
                 price: r.default_price,
+                cost_price: Number(r.cost_price) || 0,
                 type: r.product_type,
                 stock: inv ? Number(inv.quantity) : 100,
                 taxGroupId: '',
@@ -104,6 +118,7 @@ export const useProductStore = defineStore('product', {
                 name: r.name || 'Unnamed Product',
                 category: r.category || 'general',
                 price: r.default_price || 0,
+                cost_price: Number(r.cost_price) || 0,
                 type: r.product_type || 'RETAIL_GOOD',
                 stock: 100,
                 taxGroupId: '',

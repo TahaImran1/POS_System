@@ -101,7 +101,16 @@ const handleAction = (actionName: string) => {
           <span class="font-bold text-gray-800 text-sm">Refund</span>
         </button>
 
-        <!-- 9. Cancel Order -->
+        <!-- 9. Pay Vendor -->
+        <button 
+          @click="handleAction('pay-vendor')"
+          class="p-6 bg-white border border-purple-200 rounded-xl hover:border-[#714B67] hover:shadow-md transition-all flex flex-col items-center justify-center gap-2 group"
+        >
+          <i class="fas fa-file-invoice-dollar text-[#714B67] text-xl group-hover:scale-110 transition-transform"></i>
+          <span class="font-bold text-[#714B67] text-sm">Pay Vendor</span>
+        </button>
+
+        <!-- 10. Cancel Order -->
         <button 
           @click="handleAction('cancel')"
           class="p-6 bg-white border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-md transition-all flex flex-col items-center justify-center gap-2 group"

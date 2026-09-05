@@ -7,6 +7,7 @@ import TransferModal from './modals/TransferModal.vue'
 import ActionsModal from './modals/ActionsModal.vue'
 import QuotationModal from './modals/QuotationModal.vue'
 import PricelistModal from './modals/PricelistModal.vue'
+import SaleReturnModal from './modals/SaleReturnModal.vue'
 import { useToast } from '../composables/useToast'
 
 const props = defineProps<{
@@ -16,6 +17,8 @@ const props = defineProps<{
 const emit = defineEmits(['select-table', 'set-tab'])
 const cart = useCartStore()
 const settingsStore = useSettingsStore()
+import VendorPaymentModal from './modals/VendorPaymentModal.vue'
+
 const toast = useToast()
 
 const isRestaurant = computed(() => settingsStore.posMode === 'restaurant')
@@ -26,6 +29,8 @@ const isTransferModalOpen = ref(false)
 const isActionsModalOpen = ref(false)
 const isQuotationModalOpen = ref(false)
 const isPricelistModalOpen = ref(false)
+const isSaleReturnModalOpen = ref(false)
+const isVendorPaymentModalOpen = ref(false)
 const selectedCustomer = ref<Customer | null>(null)
 const guestCount = ref(1)
 
@@ -41,7 +46,7 @@ const handleTransfer = (targetTableId: number) => {
   toast.success(`Order transferred to Table ${targetTableId}!`)
 }
 
-const handleActionTrigger = (act: string) => {
+function handleActionTrigger(act: string) {
   if (act === 'cancel') {
     cart.clearActiveCart()
   } else if (act === 'customer-note') {
@@ -60,7 +65,9 @@ const handleActionTrigger = (act: string) => {
   } else if (act === 'pricelist') {
     isPricelistModalOpen.value = true
   } else if (act === 'refund') {
-    toast.info('Select past retail receipt to process refund!')
+    isSaleReturnModalOpen.value = true
+  } else if (act === 'pay-vendor') {
+    isVendorPaymentModalOpen.value = true
   }
 }
 </script>
@@ -228,5 +235,7 @@ const handleActionTrigger = (act: string) => {
     <ActionsModal :show="isActionsModalOpen" @close="isActionsModalOpen = false" @action="handleActionTrigger" />
     <QuotationModal :show="isQuotationModalOpen" @close="isQuotationModalOpen = false" />
     <PricelistModal :show="isPricelistModalOpen" @close="isPricelistModalOpen = false" />
+    <SaleReturnModal :show="isSaleReturnModalOpen" @close="isSaleReturnModalOpen = false" />
+    <VendorPaymentModal :show="isVendorPaymentModalOpen" @close="isVendorPaymentModalOpen = false" />
   </div>
 </template>

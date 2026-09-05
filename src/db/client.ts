@@ -269,6 +269,24 @@ export async function initDb() {
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN closing_cash_counted REAL;")
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN cash_variance REAL;")
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN closed_at INTEGER;")
+    
+    // Migrations for users table designation, rights permissions & reports_to hierarchy
+    safeAlter("ALTER TABLE users ADD COLUMN designation TEXT DEFAULT 'Staff Member';")
+    safeAlter("ALTER TABLE users ADD COLUMN rights TEXT;")
+    safeAlter("ALTER TABLE users ADD COLUMN reports_to_user_id TEXT;")
+    safeAlter("ALTER TABLE products ADD COLUMN base_uom TEXT DEFAULT 'PCS';")
+    safeAlter("ALTER TABLE products ADD COLUMN product_type TEXT NOT NULL DEFAULT 'FINISHED_GOOD';")
+    safeAlter("ALTER TABLE products ADD COLUMN cost_price REAL DEFAULT 0;")
+    safeAlter(`
+      CREATE TABLE IF NOT EXISTS vendor_product_prices (
+        id text PRIMARY KEY NOT NULL,
+        vendor_id text NOT NULL,
+        product_id text NOT NULL,
+        uom_name text DEFAULT 'PCS' NOT NULL,
+        last_buying_price real DEFAULT 0 NOT NULL,
+        updated_at integer
+      );
+    `)
 
     console.log('[DB] Schema verified.')
 

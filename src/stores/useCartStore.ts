@@ -15,6 +15,9 @@ export interface CartItem {
   discount: number
   tax: number
   course?: string
+  uom_id?: string
+  uom_name?: string
+  uom_multiplier?: number
 }
 
 export interface Ticket {
@@ -59,15 +62,15 @@ export const useCartStore = defineStore('cart', {
     subtotal(): number {
       return this.items.reduce((sum: number, item: CartItem) => {
         const p = Number(item.price) || 0
-        const q = Number(item.quantity) || 1
-        const d = Number(item.discount) || 0
+        const q = Math.max(0, Number(item.quantity) || 0)
+        const d = Math.max(0, Math.min(100, Number(item.discount) || 0))
         return sum + (p * q * (1 - d / 100))
       }, 0)
     },
     itemTaxes(): number {
       return this.items.reduce((sum: number, item: CartItem) => {
         const t = Number(item.tax) || 0
-        const q = Number(item.quantity) || 1
+        const q = Math.max(0, Number(item.quantity) || 0)
         return sum + (t * q)
       }, 0)
     },
@@ -210,13 +213,17 @@ export const useCartStore = defineStore('cart', {
 
       if (val === 'backspace') {
         if (this.numpadMode === 'qty') {
-          item.quantity = Math.floor(item.quantity / 10)
           if (item.quantity === 0) {
+            // Already 0 on this remove press -> remove item from ticket
             ticket.items = ticket.items.filter(i => i.id !== ticket.selectedItemId)
             ticket.selectedItemId = ticket.items.length > 0 ? ticket.items[ticket.items.length - 1].id : null
+          } else {
+            // Reduce quantity (single digits like 1 or 7 become 0 and stay in cart until next remove press)
+            item.quantity = Math.floor(item.quantity / 10)
           }
         } else if (this.numpadMode === 'disc') {
           item.discount = Math.floor(item.discount / 10)
+          item.discount = Math.max(0, Math.min(100, item.discount))
         } else if (this.numpadMode === 'price') {
           const str = item.price.toString()
           const newStr = str.slice(0, -1)
@@ -229,10 +236,11 @@ export const useCartStore = defineStore('cart', {
       if (isNaN(num) && val !== '.') return
 
       if (this.numpadMode === 'qty') {
-        item.quantity = item.quantity === 1 ? num : parseInt(item.quantity.toString() + val)
+        item.quantity = (item.quantity === 0 || item.quantity === 1) ? num : parseInt(item.quantity.toString() + val)
       } else if (this.numpadMode === 'disc') {
-        const newDisc = parseInt(item.discount.toString() + val)
-        item.discount = Math.min(100, isNaN(newDisc) ? 0 : newDisc)
+        const currentDiscStr = item.discount === 0 ? '' : item.discount.toString()
+        const newDisc = parseInt(currentDiscStr + val)
+        item.discount = Math.max(0, Math.min(100, isNaN(newDisc) ? 0 : newDisc))
       } else if (this.numpadMode === 'price') {
         item.price = parseFloat(item.price.toString() + val)
       }
@@ -262,13 +270,15 @@ export const useCartStore = defineStore('cart', {
         await sessionStore.openSession(100)
       }
       
-      if (this.items.length === 0) return null
+      const validItems = this.items.filter(i => i.quantity > 0)
+      if (validItems.length === 0) return null
 
-      const payload = this.items.map(item => ({
+      const payload = validItems.map(item => ({
         product_id: item.product.id,
         quantity: item.quantity,
         price: item.price,
-        tax: item.tax
+        tax: item.tax,
+        uom_multiplier: item.uom_multiplier || 1
       }))
 
       const finalTotal = this.total

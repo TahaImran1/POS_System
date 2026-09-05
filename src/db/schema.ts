@@ -13,6 +13,7 @@ export const products = sqliteTable('products', {
   name: text('name').notNull(),
   product_type: text('product_type').notNull(), // FINISHED_GOOD, RAW_MATERIAL, SERVICE
   default_price: real('default_price').notNull().default(0),
+  cost_price: real('cost_price').notNull().default(0),
   uom: text('uom').notNull().default('PCS'),
   image: text('image'),
   description: text('description'),
@@ -170,7 +171,10 @@ export const users = sqliteTable('users', {
   username: text('username').notNull().unique(),
   name: text('name').notNull(),
   pin: text('pin').notNull(),
-  role: text('role').notNull(), // DEVELOPER, MANAGER, SALESPERSON
+  role: text('role').notNull().default('SALESPERSON'), // Legacy role field retained for compatibility
+  designation: text('designation').notNull().default('Staff Member'),
+  rights: text('rights', { mode: 'json' }), // JSON array of granted feature/screen permission keys
+  reports_to_user_id: text('reports_to_user_id'), // User ID of direct manager / superior in hierarchy
   node_id: text('node_id').references(() => nodes.node_id),
   created_at: integer('created_at')
 })
@@ -179,5 +183,106 @@ export const app_settings = sqliteTable('app_settings', {
   setting_id: text('setting_id').primaryKey(),
   key: text('key').notNull().unique(),
   value: text('value').notNull(),
+  updated_at: integer('updated_at')
+})
+
+export const product_price_history = sqliteTable('product_price_history', {
+  history_id: text('history_id').primaryKey(),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  old_price: real('old_price').notNull(),
+  new_price: real('new_price').notNull(),
+  change_reason: text('change_reason'),
+  user_name: text('user_name'),
+  created_at: integer('created_at')
+})
+
+export const sales_returns = sqliteTable('sales_returns', {
+  return_id: text('return_id').primaryKey(),
+  origin_sale_id: text('origin_sale_id').notNull().references(() => sales.sale_id),
+  session_id: text('session_id').references(() => cash_sessions.session_id),
+  node_id: text('node_id').references(() => nodes.node_id),
+  return_type: text('return_type').notNull().default('PARTIAL'), // FULL, PARTIAL, EXCHANGE
+  total_refund_credit: real('total_refund_credit').notNull().default(0),
+  total_new_charges: real('total_new_charges').notNull().default(0),
+  net_settlement: real('net_settlement').notNull().default(0),
+  refund_method: text('refund_method').notNull().default('Cash'),
+  user_name: text('user_name'),
+  reason: text('reason'),
+  created_at: integer('created_at')
+})
+
+export const sales_return_items = sqliteTable('sales_return_items', {
+  return_item_id: text('return_item_id').primaryKey(),
+  return_id: text('return_id').notNull().references(() => sales_returns.return_id),
+  sale_item_id: text('sale_item_id').references(() => sale_items.sale_item_id),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  quantity_returned: real('quantity_returned').notNull(),
+  old_unit_price: real('old_unit_price').notNull(),
+  item_condition: text('item_condition').notNull().default('RESTOCKABLE'), // RESTOCKABLE, DAMAGED, EXPIRED, DEFECTIVE_VENDOR_CLAIM
+  refund_subtotal: real('refund_subtotal').notNull()
+})
+
+export const vendors = sqliteTable('vendors', {
+  vendor_id: text('vendor_id').primaryKey(),
+  name: text('name').notNull(),
+  company_name: text('company_name'),
+  phone: text('phone'),
+  email: text('email'),
+  address: text('address'),
+  balance: real('balance').notNull().default(0), // + we owe vendor, - vendor credit
+  created_at: integer('created_at')
+})
+
+export const damaged_expired_hold = sqliteTable('damaged_expired_hold', {
+  hold_id: text('hold_id').primaryKey(),
+  sale_return_id: text('sale_return_id').references(() => sales_returns.return_id),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  quantity: real('quantity').notNull(),
+  cost_price: real('cost_price').notNull(),
+  condition: text('condition').notNull().default('DAMAGED_HOLD'), // DAMAGED_HOLD, EXPIRED_HOLD
+  status: text('status').notNull().default('PENDING_CLAIM'), // PENDING_CLAIM, VENDOR_RECLAIMED, SCRAPPED
+  reclaimed_vendor_id: text('reclaimed_vendor_id').references(() => vendors.vendor_id),
+  debit_note_id: text('debit_note_id'),
+  created_at: integer('created_at')
+})
+
+export const vendor_payments = sqliteTable('vendor_payments', {
+  payment_id: text('payment_id').primaryKey(),
+  vendor_id: text('vendor_id').notNull().references(() => vendors.vendor_id),
+  po_id: text('po_id'),
+  session_id: text('session_id').references(() => cash_sessions.session_id),
+  amount: real('amount').notNull(),
+  debit_note_amount: real('debit_note_amount').notNull().default(0),
+  payment_method: text('payment_method').notNull().default('Cash'), // Cash, Bank, Cheque, Debit Note Credit
+  user_name: text('user_name'),
+  notes: text('notes'),
+  created_at: integer('created_at')
+})
+
+export const product_uom = sqliteTable('product_uom', {
+  uom_id: text('uom_id').primaryKey(),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  uom_name: text('uom_name').notNull(), // Piece, Pack, Box, Carton
+  multiplier_to_base: real('multiplier_to_base').notNull().default(1),
+  cost_price: real('cost_price').notNull().default(0),
+  selling_price: real('selling_price').notNull().default(0),
+  is_base_uom: integer('is_base_uom').notNull().default(0),
+  created_at: integer('created_at')
+})
+
+export const product_barcodes = sqliteTable('product_barcodes', {
+  barcode_id: text('barcode_id').primaryKey(),
+  barcode: text('barcode').notNull().unique(),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  uom_id: text('uom_id').references(() => product_uom.uom_id),
+  created_at: integer('created_at')
+})
+
+export const vendor_product_prices = sqliteTable('vendor_product_prices', {
+  id: text('id').primaryKey(),
+  vendor_id: text('vendor_id').notNull().references(() => vendors.vendor_id),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  uom_name: text('uom_name').notNull().default('PCS'),
+  last_buying_price: real('last_buying_price').notNull().default(0),
   updated_at: integer('updated_at')
 })

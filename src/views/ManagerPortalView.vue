@@ -6,6 +6,7 @@ import { taxService, type TaxGroup } from '../services/taxService'
 import { bomService } from '../services/bomService'
 import CreateProductModal from '../components/modals/CreateProductModal.vue'
 import InventoryHistoryView from './InventoryHistoryView.vue'
+import ReportsView from './ReportsView.vue'
 import { useToast } from '../composables/useToast'
 import { db } from '../db/client'
 import * as schema from '../db/schema'
@@ -13,7 +14,7 @@ import { desc } from 'drizzle-orm'
 import type { Product } from '../stores/useProductStore'
 import { useSettingsStore } from '../stores/useSettingsStore'
 import { useCartStore } from '../stores/useCartStore'
-import { useAuthStore, type UserRole, type UserAccount } from '../stores/useAuthStore'
+import { useAuthStore, SYSTEM_RIGHTS, getDefaultRightsForUser, type UserAccount } from '../stores/useAuthStore'
 
 const settingsStore = useSettingsStore()
 const authStore = useAuthStore()
@@ -444,7 +445,7 @@ const handleAddBomItem = async () => {
   await loadBomRecipes()
 }
 
-// Staff & Salesperson Management Methods
+// Staff & User Management Methods
 const managerStaffUsers = computed(() => authStore.users.filter(u => u.role !== 'DEVELOPER'))
 const showStaffModal = ref(false)
 const editingStaffId = ref<string | null>(null)
@@ -452,18 +453,39 @@ const staffForm = ref<{
   name: string
   username: string
   pin: string
-  role: UserRole
+  designation: string
+  rights: string[]
+  reports_to_user_id?: string | null
   node_id?: string
 }>({
   name: '',
   username: '',
   pin: '',
-  role: 'SALESPERSON',
+  designation: 'Salesperson / Cashier',
+  rights: ['pos_register_screen', 'sales_returns_screen', 'apply_discounts', 'cash_drawer_drops'],
+  reports_to_user_id: null,
   node_id: ''
 })
 
 const generateRandomStaffPin = () => {
   staffForm.value.pin = Math.floor(1000 + Math.random() * 9000).toString()
+}
+
+const toggleStaffRight = (key: string) => {
+  const idx = staffForm.value.rights.indexOf(key)
+  if (idx > -1) {
+    staffForm.value.rights.splice(idx, 1)
+  } else {
+    staffForm.value.rights.push(key)
+  }
+}
+
+const selectAllStaffRights = () => {
+  staffForm.value.rights = SYSTEM_RIGHTS.map(r => r.key)
+}
+
+const clearAllStaffRights = () => {
+  staffForm.value.rights = []
 }
 
 const handleOpenCreateStaff = () => {
@@ -472,7 +494,9 @@ const handleOpenCreateStaff = () => {
     name: '',
     username: '',
     pin: Math.floor(1000 + Math.random() * 9000).toString(),
-    role: 'SALESPERSON',
+    designation: 'Salesperson / Cashier',
+    rights: ['pos_register_screen', 'sales_returns_screen', 'apply_discounts', 'cash_drawer_drops'],
+    reports_to_user_id: null,
     node_id: masterDbStore.nodes[0]?.node_id || ''
   }
   showStaffModal.value = true
@@ -484,7 +508,9 @@ const handleEditStaff = (user: UserAccount) => {
     name: user.name,
     username: user.username,
     pin: user.pin,
-    role: user.role,
+    designation: user.designation || 'Staff Member',
+    rights: [...getDefaultRightsForUser(user)],
+    reports_to_user_id: user.reports_to_user_id || null,
     node_id: user.node_id || masterDbStore.nodes[0]?.node_id || ''
   }
   showStaffModal.value = true
@@ -494,6 +520,9 @@ const handleSaveStaff = async () => {
   const name = staffForm.value.name.trim()
   const username = staffForm.value.username.trim().toLowerCase()
   const pin = staffForm.value.pin.trim()
+  const designation = staffForm.value.designation.trim() || 'Staff Member'
+  const rights = staffForm.value.rights
+  const reports_to_user_id = staffForm.value.reports_to_user_id || null
 
   if (!name || !username || !pin) {
     toast.warning('Please enter Name, Username, and PIN.')
@@ -511,30 +540,34 @@ const handleSaveStaff = async () => {
         name,
         username,
         pin,
-        role: staffForm.value.role,
+        designation,
+        rights,
+        reports_to_user_id,
         node_id: staffForm.value.node_id
       })
-      toast.success(`Updated staff account: ${name}`)
+      toast.success(`Updated user account: ${name}`)
     } else {
       await authStore.addUser({
         name,
         username,
         pin,
-        role: staffForm.value.role,
+        designation,
+        rights,
+        reports_to_user_id,
         node_id: staffForm.value.node_id
       })
-      toast.success(`Created salesperson account: ${name} (PIN: ${pin})`)
+      toast.success(`Created staff account: ${name} (${designation})`)
     }
     showStaffModal.value = false
     editingStaffId.value = null
     await authStore.loadUsers()
   } catch (err: any) {
-    toast.error(`Failed to save staff account: ${err.message}`)
+    toast.error(`Failed to save user account: ${err.message}`)
   }
 }
 
 const handleDeleteStaff = async (user: UserAccount) => {
-  if (user.role === 'DEVELOPER') {
+  if (user.role === 'DEVELOPER' || (user.rights && user.rights.includes('*'))) {
     toast.warning('Developer / Super Admin accounts cannot be deleted here.')
     return
   }
@@ -545,7 +578,7 @@ const handleDeleteStaff = async (user: UserAccount) => {
   if (confirm(`Are you sure you want to delete staff account "${user.name}"? This action cannot be undone.`)) {
     try {
       await authStore.deleteUser(user.user_id)
-      toast.success(`Deleted staff member: ${user.name}`)
+      toast.success(`Deleted user account: ${user.name}`)
     } catch (err: any) {
       toast.error(`Failed to delete user: ${err.message}`)
     }
@@ -609,7 +642,7 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
         class="py-3 px-2 flex items-center gap-2 transition-colors cursor-pointer"
       >
         <i class="fas fa-[#714B67] fa-warehouse"></i>
-        <span>Inventory & Stock History</span>
+        <span>Purchase Orders & Inventory</span>
       </button>
 
       <button 
@@ -969,255 +1002,18 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
         <InventoryHistoryView />
       </div>
 
-      <!-- TAB 5: SALES REPORTS & ITEM-WISE TAX REPORT -->
-      <div v-if="activeTab === 'reports'" class="bg-white p-6 rounded-2xl shadow-xs border border-gray-200 space-y-6">
-        
-        <!-- Header Bar & Sub-tab Navigation -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center border-b border-gray-100 pb-4 gap-4">
-          <div>
-            <h3 class="font-black text-lg text-gray-900 flex items-center gap-2">
-              <i class="fas fa-chart-line text-[#714B67]"></i>
-              <span>Sales & Item-Wise Tax Reports</span>
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">Filter sales by date range, generate itemized tax reports, and inspect totals.</p>
-          </div>
-
-          <!-- Sub-tab view switch -->
-          <div class="flex bg-gray-100 p-1 rounded-xl text-xs font-bold shrink-0">
-            <button 
-              @click="reportSubTab = 'item_wise'"
-              :class="[reportSubTab === 'item_wise' ? 'bg-[#714B67] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900']"
-              class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <i class="fas fa-list-ol"></i>
-              <span>Item-Wise Sales Report</span>
-            </button>
-            <button 
-              @click="reportSubTab = 'transactions'"
-              :class="[reportSubTab === 'transactions' ? 'bg-[#714B67] text-white shadow-xs' : 'text-gray-600 hover:text-gray-900']"
-              class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <i class="fas fa-receipt"></i>
-              <span>Receipt Transactions Log</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Date Range Filter Bar -->
-        <div class="bg-purple-50/40 p-4 rounded-2xl border border-purple-100 flex flex-wrap items-center justify-between gap-4 text-xs">
-          <div class="flex flex-wrap items-center gap-3">
-            <!-- Date Inputs -->
-            <div class="flex items-center gap-2">
-              <label class="font-bold text-gray-700">From Date:</label>
-              <input 
-                v-model="reportFromDate" 
-                @change="loadItemWiseReport"
-                type="date" 
-                class="bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-800 font-mono focus:outline-none focus:border-[#714B67]"
-              />
-            </div>
-
-            <div class="flex items-center gap-2">
-              <label class="font-bold text-gray-700">To Date:</label>
-              <input 
-                v-model="reportToDate" 
-                @change="loadItemWiseReport"
-                type="date" 
-                class="bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-800 font-mono focus:outline-none focus:border-[#714B67]"
-              />
-            </div>
-
-            <!-- Date Presets -->
-            <div class="flex gap-1">
-              <button @click="setDatePreset('today')" class="px-2.5 py-1 bg-white hover:bg-purple-100 border border-gray-300 rounded-md font-bold text-[11px] text-gray-700 transition-colors">Today</button>
-              <button @click="setDatePreset('this_week')" class="px-2.5 py-1 bg-white hover:bg-purple-100 border border-gray-300 rounded-md font-bold text-[11px] text-gray-700 transition-colors">This Week</button>
-              <button @click="setDatePreset('this_month')" class="px-2.5 py-1 bg-white hover:bg-purple-100 border border-gray-300 rounded-md font-bold text-[11px] text-gray-700 transition-colors">This Month</button>
-              <button @click="setDatePreset('all_time')" class="px-2.5 py-1 bg-white hover:bg-purple-100 border border-gray-300 rounded-md font-bold text-[11px] text-gray-700 transition-colors">All Time</button>
-            </div>
-          </div>
-
-          <!-- Action Buttons -->
-          <div class="flex gap-2">
-            <button 
-              @click="loadSalesReport" 
-              class="px-3 py-1.5 bg-[#714B67] hover:bg-[#5c3d54] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <i class="fas fa-filter text-amber-300"></i>
-              <span>Filter Report</span>
-            </button>
-            <button 
-              @click="openPdfReportPreview" 
-              class="px-3.5 py-1.5 bg-[#714B67] hover:bg-[#5a3a52] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <i class="fas fa-file-pdf text-amber-300"></i>
-              <span>Preview & Print PDF</span>
-            </button>
-            <button 
-              @click="exportItemWiseCsv" 
-              class="px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <i class="fas fa-file-csv"></i>
-              <span>Export CSV</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- VIEW 1: ITEM-WISE SALES REPORT TABLE & SUMMARY BOX -->
-        <div v-if="reportSubTab === 'item_wise'" class="space-y-4 printable-report">
-          <div class="overflow-x-auto border border-gray-200 rounded-2xl shadow-xs">
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-100/80 text-gray-700 font-bold border-b border-gray-200 uppercase tracking-wider text-[11px]">
-                  <th class="p-3">Product Name & Barcode</th>
-                  <th class="p-3 text-center">Tax Rate / Rule</th>
-                  <th class="p-3 text-center">Category</th>
-                  <th class="p-3 text-center">Qty Sold</th>
-                  <th class="p-3 text-right">Unit Price (Excl. Tax)</th>
-                  <th class="p-3 text-right">Total Tax on Product</th>
-                  <th class="p-3 text-right">Amount (Incl. Tax)</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100 font-sans">
-                <tr v-if="itemWiseReportData.length === 0">
-                  <td colspan="7" class="p-10 text-center text-gray-400 font-medium">
-                    <i class="fas fa-boxes text-3xl mb-2 text-gray-300"></i>
-                    <p class="font-bold text-gray-600">No item-wise sales recorded in selected date range.</p>
-                    <p class="text-xs text-gray-500 mt-1">Adjust dates above or complete sales in POS Register.</p>
-                  </td>
-                </tr>
-                <tr v-for="(item, idx) in itemWiseReportData" :key="item.product_id + '_tax_' + item.unit_tax_per_item + '_' + idx" class="hover:bg-gray-50/80 transition-colors">
-                  <td class="p-3 font-bold text-gray-900">
-                    <div>{{ item.product_name }}</div>
-                    <div class="text-[10px] text-gray-400 font-mono font-normal">SKU: {{ item.barcode }}</div>
-                  </td>
-                  <td class="p-3 text-center">
-                    <span v-if="item.unit_tax_per_item > 0" class="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                      Tax {{ item.tax_rate_pct.toFixed(1) }}% (+Rs {{ item.unit_tax_per_item.toFixed(2) }}/pc)
-                    </span>
-                    <span v-else class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-gray-100 text-gray-500 border border-gray-200">
-                      No Tax (0%)
-                    </span>
-                  </td>
-                  <td class="p-3 text-center">
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-teal-50 text-teal-800 border border-teal-200 capitalize">
-                      {{ item.category }}
-                    </span>
-                  </td>
-                  <td class="p-3 text-center font-bold text-gray-900 font-mono text-sm">
-                    {{ item.total_quantity }} Pcs
-                  </td>
-                  <td class="p-3 text-right font-mono font-semibold text-gray-700">
-                    Rs {{ item.unit_price_excl_tax.toFixed(2) }}
-                  </td>
-                  <td class="p-3 text-right font-mono font-bold text-indigo-600">
-                    +Rs {{ item.total_tax_amount.toFixed(2) }}
-                  </td>
-                  <td class="p-3 text-right font-mono font-black text-emerald-700 text-sm">
-                    Rs {{ item.total_amount_incl_tax.toFixed(2) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- SUMMARY BOX BELOW TABLE (BOTTOM RIGHT) -->
-          <div class="flex justify-end pt-2">
-            <div class="w-full max-w-md bg-purple-50/50 p-5 rounded-2xl border border-purple-200 shadow-xs space-y-3 font-mono text-xs">
-              <div class="flex justify-between items-center text-purple-950 font-bold border-b border-purple-200/80 pb-2 font-sans">
-                <span class="text-sm flex items-center gap-1.5">
-                  <i class="fas fa-calculator text-[#714B67]"></i>
-                  <span>Summary & Tax Breakdown</span>
-                </span>
-                <span class="px-2.5 py-0.5 rounded-full bg-purple-200 text-[#714B67] text-[10px] font-black uppercase">
-                  {{ reportFromDate }} to {{ reportToDate }}
-                </span>
-              </div>
-
-              <!-- Total Untaxed Amount of all items -->
-              <div class="flex justify-between items-center text-gray-700 font-semibold">
-                <span class="font-sans">Total Untaxed Base Amount:</span>
-                <span class="font-bold text-gray-900 text-sm">Rs {{ itemWiseSummary.total_untaxed_amount.toFixed(2) }}</span>
-              </div>
-
-              <!-- Total Tax with Total % -->
-              <div class="flex justify-between items-start text-indigo-900 border-t border-purple-200/60 pt-2">
-                <div>
-                  <div class="font-bold font-sans flex items-center gap-1">
-                    <span>Tax ({{ itemWiseSummary.effective_tax_rate.toFixed(1) }}% Rate):</span>
-                  </div>
-                  <div class="text-[10px] text-gray-500 font-sans mt-0.5">
-                    Item Taxes: Rs {{ itemWiseSummary.total_item_tax.toFixed(2) }} | Bill Taxes: Rs {{ itemWiseSummary.total_bill_tax.toFixed(2) }}
-                  </div>
-                </div>
-                <span class="font-bold text-indigo-700 text-sm">+Rs {{ itemWiseSummary.total_tax_amount.toFixed(2) }}</span>
-              </div>
-
-              <!-- Grand Total -->
-              <div class="flex justify-between items-center text-base font-black text-emerald-950 border-t-2 border-purple-300 pt-2 font-sans">
-                <span>Grand Total Revenue:</span>
-                <span class="font-mono text-emerald-700 text-lg font-black">Rs {{ itemWiseSummary.grand_total.toFixed(2) }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- VIEW 2: RECEIPT TRANSACTIONS LOG -->
-        <div v-else class="space-y-4">
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div class="p-4 rounded-xl bg-purple-50 border border-purple-100">
-              <div class="text-xs text-purple-700 font-bold uppercase tracking-wider">Total Sales Count</div>
-              <div class="text-2xl font-extrabold text-purple-900 mt-1">{{ salesSummary.count }} Orders</div>
-            </div>
-            <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-100">
-              <div class="text-xs text-emerald-700 font-bold uppercase tracking-wider">Net Sales Total</div>
-              <div class="text-2xl font-extrabold text-emerald-900 mt-1">Rs {{ salesSummary.total_net.toFixed(2) }}</div>
-            </div>
-          </div>
-
-          <div class="overflow-x-auto border border-gray-200 rounded-xl">
-            <table class="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr class="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
-                  <th class="p-3">Receipt #</th>
-                  <th class="p-3">Date</th>
-                  <th class="p-3">Payment Method</th>
-                  <th class="p-3 text-right">Subtotal</th>
-                  <th class="p-3 text-right">Tax</th>
-                  <th class="p-3 text-right">Net Total</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr v-if="salesReportData.length === 0">
-                  <td colspan="6" class="p-8 text-center text-gray-400 font-medium">
-                    <p>No sales recorded in database yet.</p>
-                    <p class="text-xs text-gray-500 mt-1">Complete a checkout in POS Register to record a transaction.</p>
-                  </td>
-                </tr>
-                <tr v-for="s in salesReportData" :key="s.sale_id" class="hover:bg-gray-50">
-                  <td class="p-3 font-semibold text-gray-900 font-mono text-[11px]">POS-{{ s.sale_id?.substr(0,8).toUpperCase() }}</td>
-                  <td class="p-3 text-gray-500 text-[11px]">
-                    {{ s.created_at ? new Date(s.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A' }}
-                  </td>
-                  <td class="p-3">
-                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 uppercase">{{ s.payment_method }}</span>
-                  </td>
-                  <td class="p-3 text-right font-mono text-gray-700">Rs {{ Number(s.subtotal || 0).toFixed(2) }}</td>
-                  <td class="p-3 text-right font-mono text-indigo-600">+Rs {{ Number(s.tax_total || 0).toFixed(2) }}</td>
-                  <td class="p-3 text-right font-extrabold text-emerald-700 font-mono">Rs {{ Number(s.net_total || 0).toFixed(2) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      <!-- TAB 5: MULTI-DIMENSIONAL REPORTS -->
+      <div v-if="activeTab === 'reports'" class="h-[calc(100vh-170px)] rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+        <ReportsView />
       </div>
 
-      <!-- TAB 6: STAFF & SALESPERSONS MANAGEMENT -->
+      <!-- TAB 6: STAFF & USER MANAGEMENT -->
       <div v-if="activeTab === 'users'" class="space-y-5">
         <!-- Top Stats Row -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
             <div>
-              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Store Staff</div>
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Total User Accounts</div>
               <div class="text-2xl font-black text-gray-900 mt-1">{{ managerStaffUsers.length }}</div>
             </div>
             <div class="w-12 h-12 rounded-xl bg-purple-50 text-[#714B67] flex items-center justify-center text-xl font-bold border border-purple-100">
@@ -1227,9 +1023,9 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
 
           <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
             <div>
-              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Salespersons / Cashiers</div>
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Active Register Users</div>
               <div class="text-2xl font-black text-emerald-600 mt-1">
-                {{ managerStaffUsers.filter(u => u.role === 'SALESPERSON').length }}
+                {{ managerStaffUsers.filter(u => getDefaultRightsForUser(u).includes('access_pos')).length }}
               </div>
             </div>
             <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl font-bold border border-emerald-100">
@@ -1239,9 +1035,9 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
 
           <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-xs flex items-center justify-between">
             <div>
-              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Store Managers & Owners</div>
+              <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Portal Managers</div>
               <div class="text-2xl font-black text-indigo-600 mt-1">
-                {{ managerStaffUsers.filter(u => u.role === 'MANAGER').length }}
+                {{ managerStaffUsers.filter(u => getDefaultRightsForUser(u).includes('access_manager_portal')).length }}
               </div>
             </div>
             <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl font-bold border border-indigo-100">
@@ -1254,15 +1050,15 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
         <div class="bg-white p-6 rounded-xl shadow-xs border border-gray-200 space-y-4">
           <div class="flex justify-between items-center border-b border-gray-100 pb-4">
             <div>
-              <h3 class="font-bold text-base text-gray-900">Staff & Cashier Credentials</h3>
-              <p class="text-xs text-gray-500">Create and manage cashier accounts, set secret PINs, and grant store permissions.</p>
+              <h3 class="font-bold text-base text-gray-900">User Accounts & Rights Directory</h3>
+              <p class="text-xs text-gray-500">Create user accounts, set freeform designations, assign secret PINs, and toggle granular access rights.</p>
             </div>
             <button 
               @click="handleOpenCreateStaff" 
               class="px-4 py-2 bg-[#714B67] hover:bg-[#5a3a52] text-white font-bold text-xs rounded-lg flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
             >
               <i class="fas fa-user-plus"></i>
-              <span>Add New Salesperson</span>
+              <span>+ Create New User Account</span>
             </button>
           </div>
 
@@ -1271,31 +1067,28 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
             <table class="w-full text-left text-xs border-collapse">
               <thead>
                 <tr class="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold uppercase text-[10px] tracking-wider">
-                  <th class="p-3">Staff Member</th>
+                  <th class="p-3">User Name</th>
                   <th class="p-3">Login Username</th>
-                  <th class="p-3">Assigned Role</th>
+                  <th class="p-3">Designation</th>
+                  <th class="p-3">Granted Rights / Access</th>
                   <th class="p-3">Terminal / Branch</th>
-                  <th class="p-3">Login PIN</th>
+                  <th class="p-3">PIN Code</th>
                   <th class="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100">
                 <tr v-if="managerStaffUsers.length === 0">
-                  <td colspan="6" class="p-8 text-center text-gray-400 font-medium">
-                    No staff accounts found. Click "Add New Salesperson" above to create one.
+                  <td colspan="7" class="p-8 text-center text-gray-400 font-medium">
+                    No staff accounts found. Click "+ Create New User Account" above to add one.
                   </td>
                 </tr>
                 <tr v-for="u in managerStaffUsers" :key="u.user_id" class="hover:bg-gray-50/80 transition-colors">
                   <td class="p-3">
                     <div class="flex items-center gap-3">
                       <div 
-                        :class="[
-                          u.role === 'MANAGER' ? 'bg-indigo-100 text-indigo-800' : 'bg-emerald-100 text-emerald-800'
-                        ]"
-                        class="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shrink-0 border border-black/5"
+                        class="w-9 h-9 rounded-xl bg-purple-100 text-[#714B67] flex items-center justify-center font-bold text-sm shrink-0 border border-purple-200"
                       >
-                        <i v-if="u.role === 'MANAGER'" class="fas fa-user-tie"></i>
-                        <i v-else class="fas fa-cash-register"></i>
+                        <i class="fas fa-user"></i>
                       </div>
                       <div>
                         <div class="font-bold text-gray-900 text-xs">{{ u.name }}</div>
@@ -1306,13 +1099,29 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
                   <td class="p-3 font-mono font-bold text-gray-700 text-xs">@{{ u.username }}</td>
                   <td class="p-3">
                     <span 
-                      :class="[
-                        u.role === 'MANAGER' ? 'bg-indigo-100 text-indigo-800 border-indigo-200' : 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                      ]"
-                      class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border"
+                      class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-50 text-[#714B67] border border-purple-200"
                     >
-                      {{ u.role }}
+                      {{ u.designation || u.role || 'Staff Member' }}
                     </span>
+                  </td>
+                  <td class="p-3">
+                    <div class="flex flex-wrap gap-1 items-center max-w-xs">
+                      <template v-if="getDefaultRightsForUser(u).includes('*')">
+                        <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">Full Super Access (*)</span>
+                      </template>
+                      <template v-else>
+                        <span 
+                          v-for="rKey in getDefaultRightsForUser(u).slice(0, 3)" 
+                          :key="rKey"
+                          class="px-1.5 py-0.5 rounded bg-gray-100 text-gray-700 text-[9px] font-bold border border-gray-200"
+                        >
+                          {{ SYSTEM_RIGHTS.find(r => r.key === rKey)?.label || rKey }}
+                        </span>
+                        <span v-if="getDefaultRightsForUser(u).length > 3" class="text-[10px] font-bold text-purple-700">
+                          +{{ getDefaultRightsForUser(u).length - 3 }} more
+                        </span>
+                      </template>
+                    </div>
                   </td>
                   <td class="p-3 text-gray-600 text-xs">
                     {{ u.node_id ? (masterDbStore.nodes.find(n => n.node_id === u.node_id)?.location_name || 'Main Register') : 'All Terminals' }}
@@ -1327,15 +1136,15 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
                       <button 
                         @click="handleEditStaff(u)"
                         class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-lg text-xs font-bold transition-colors cursor-pointer flex items-center gap-1"
-                        title="Edit Account or Reset PIN"
+                        title="Edit Designation, PIN or Rights"
                       >
                         <i class="fas fa-edit text-xs"></i>
-                        <span>Edit / PIN</span>
+                        <span>Edit / Rights</span>
                       </button>
                       <button 
                         @click="handleDeleteStaff(u)"
                         class="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                        title="Delete Staff Account"
+                        title="Delete User Account"
                       >
                         <i class="fas fa-trash-alt text-xs"></i>
                       </button>
@@ -1359,12 +1168,12 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
 
     <!-- Create / Edit Staff Modal -->
     <div v-if="showStaffModal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden border border-gray-100 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] flex flex-col">
         <!-- Modal Header -->
-        <div class="bg-[#714B67] text-white px-6 py-4 flex justify-between items-center shadow-xs">
+        <div class="bg-[#714B67] text-white px-6 py-4 flex justify-between items-center shadow-xs shrink-0">
           <div class="flex items-center gap-2.5">
             <i class="fas fa-user-shield text-[#e0a96d] text-lg"></i>
-            <h3 class="font-bold text-base">{{ editingStaffId ? 'Edit Staff / Reset PIN' : 'Create New Salesperson / Staff' }}</h3>
+            <h3 class="font-bold text-base">{{ editingStaffId ? 'Edit Account & Rights' : 'Create New User Account' }}</h3>
           </div>
           <button @click="showStaffModal = false" class="text-white/70 hover:text-white transition-colors cursor-pointer">
             <i class="fas fa-times text-base"></i>
@@ -1372,35 +1181,66 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
         </div>
 
         <!-- Form Body -->
-        <div class="p-6 space-y-4">
-          <div>
-            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Full Staff Name *</label>
-            <input 
-              v-model="staffForm.name" 
-              type="text" 
-              placeholder="e.g. Bilal Ahmed (Cashier 1)" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67]"
-            />
+        <div class="p-6 space-y-4 overflow-y-auto flex-1 text-xs">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Full User Name *</label>
+              <input 
+                v-model="staffForm.name" 
+                type="text" 
+                placeholder="e.g. Bilal Ahmed" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Login Username *</label>
+              <input 
+                v-model="staffForm.username" 
+                type="text" 
+                placeholder="e.g. bilal" 
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+              />
+            </div>
           </div>
 
           <div>
-            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Username (Login ID) *</label>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Designation / String Title *</label>
             <input 
-              v-model="staffForm.username" 
+              v-model="staffForm.designation" 
               type="text" 
-              placeholder="e.g. bilal or cashier1" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67]"
+              placeholder="e.g. Senior Cashier, Store Manager, Shift Supervisor, Head Chef..." 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-bold text-[#714B67] focus:outline-none focus:ring-2 focus:ring-[#714B67]"
             />
+            <div class="flex gap-1.5 mt-1.5 flex-wrap">
+              <span class="text-[10px] text-gray-400 font-medium">Quick suggestions:</span>
+              <button 
+                v-for="preset in ['Salesperson / Cashier', 'Senior Cashier', 'Shift Supervisor', 'Store Manager', 'Inventory Admin']"
+                :key="preset"
+                @click="staffForm.designation = preset"
+                type="button"
+                class="text-[10px] px-2 py-0.5 rounded bg-gray-100 hover:bg-purple-100 text-gray-700 hover:text-purple-900 border border-gray-200 transition-colors cursor-pointer"
+              >
+                {{ preset }}
+              </button>
+            </div>
           </div>
 
+          <!-- Reports To Hierarchy Selector -->
           <div>
-            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Assigned Role *</label>
+            <label class="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">Reports To (Superior / Manager in Hierarchy)</label>
             <select 
-              v-model="staffForm.role" 
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67] bg-white"
+              v-model="staffForm.reports_to_user_id" 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#714B67] bg-white text-gray-900"
             >
-              <option value="SALESPERSON">🛒 Salesperson / Cashier (POS Register & Orders)</option>
-              <option value="MANAGER">👔 Store Manager (Products, Combos, Taxes, Staff & Reports)</option>
+              <option :value="null">None (Root / Top Level Manager)</option>
+              <option 
+                v-for="u in authStore.users.filter(x => x.user_id !== editingStaffId)" 
+                :key="u.user_id" 
+                :value="u.user_id"
+              >
+                {{ u.name }} (@{{ u.username }}) — {{ u.designation || 'Staff' }}
+              </option>
             </select>
           </div>
 
@@ -1422,12 +1262,56 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
               placeholder="e.g. 4829" 
               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono font-bold tracking-widest text-[#714B67] focus:outline-none focus:ring-2 focus:ring-[#714B67]"
             />
-            <p class="text-[11px] text-gray-400 mt-1">Cashiers will type this PIN on startup or when switching users.</p>
+            <p class="text-[10px] text-gray-400 mt-1">Users will enter this PIN code to switch account on the register.</p>
+          </div>
+
+          <!-- Rights & Permissions Checklist Grid -->
+          <div class="border-t border-gray-200 pt-3 space-y-2">
+            <div class="flex justify-between items-center">
+              <div>
+                <h4 class="font-extrabold text-xs text-gray-900 uppercase tracking-wider">Assigned Rights & Permissions</h4>
+                <p class="text-[11px] text-gray-500">Toggle individual rights to grant or restrict features for this user.</p>
+              </div>
+              <div class="flex gap-2">
+                <button @click="selectAllStaffRights" type="button" class="text-[10px] font-bold text-[#714B67] hover:underline cursor-pointer">
+                  Select All
+                </button>
+                <span class="text-gray-300">|</span>
+                <button @click="clearAllStaffRights" type="button" class="text-[10px] font-bold text-gray-500 hover:underline cursor-pointer">
+                  Clear All
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 max-h-56 overflow-y-auto">
+              <div 
+                v-for="r in SYSTEM_RIGHTS" 
+                :key="r.key"
+                @click="toggleStaffRight(r.key)"
+                :class="[
+                  staffForm.rights.includes(r.key) 
+                    ? 'bg-purple-50/80 border-[#714B67]/40 ring-1 ring-[#714B67]/20' 
+                    : 'bg-white border-gray-200 opacity-70 hover:opacity-100'
+                ]"
+                class="p-2.5 rounded-lg border text-left flex items-start gap-2.5 transition-all cursor-pointer select-none"
+              >
+                <input 
+                  type="checkbox" 
+                  :checked="staffForm.rights.includes(r.key)" 
+                  class="mt-0.5 text-[#714B67] rounded focus:ring-[#714B67] cursor-pointer" 
+                  @click.stop="toggleStaffRight(r.key)"
+                />
+                <div>
+                  <div class="font-bold text-xs text-gray-900 leading-tight">{{ r.label }}</div>
+                  <div class="text-[10px] text-gray-500 leading-normal">{{ r.description }}</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Footer Actions -->
-        <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2">
+        <div class="p-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-2 shrink-0">
           <button 
             @click="showStaffModal = false" 
             class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-xs font-bold rounded-lg transition-colors cursor-pointer"
@@ -1439,7 +1323,7 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
             class="px-5 py-2 bg-[#714B67] hover:bg-[#5a3a52] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
           >
             <i class="fas fa-save"></i>
-            <span>{{ editingStaffId ? 'Update Staff Member' : 'Create Staff Member' }}</span>
+            <span>{{ editingStaffId ? 'Save Rights & Account' : 'Create User Account' }}</span>
           </button>
         </div>
       </div>

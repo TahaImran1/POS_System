@@ -42,6 +42,8 @@ export async function runInitialSeed() {
         name: 'Super Developer',
         pin: '1234',
         role: 'DEVELOPER',
+        designation: 'Developer / Super Admin',
+        rights: ['*'],
         node_id: defaultNodeId,
         created_at: Date.now()
       }

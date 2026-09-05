@@ -8,7 +8,10 @@ import { db } from '../../db/client'
 import * as schema from '../../db/schema'
 import { v4 as uuidv4 } from 'uuid'
 import { eq } from 'drizzle-orm'
+import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useToast } from '../../composables/useToast'
+
+import { getProductUOMs, saveProductUOMs, type ProductUOM } from '../../services/uomService'
 
 const props = defineProps<{
   show: boolean
@@ -18,11 +21,13 @@ const props = defineProps<{
 const emit = defineEmits(['close', 'product-created', 'product-updated'])
 const productStore = useProductStore()
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 const toast = useToast()
 
 const productName = ref('')
 const barcode = ref('')
 const trackInventory = ref(true)
+const productType = ref<'FINISHED_GOOD' | 'SERVICE' | 'RAW_MATERIAL'>('FINISHED_GOOD')
 const salesPrice = ref<number | ''>(150.00)
 const initialStock = ref<number>(50)
 const salesTaxRate = ref(5) // 5%, 10%, 12%
@@ -32,6 +37,38 @@ const customCategory = ref('')
 const imageUrl = ref('')
 const isSaving = ref(false)
 const availableTaxGroups = ref<TaxGroup[]>([])
+
+// Nested UOM Hierarchy State
+export interface UomTierItem {
+  uom_id?: string
+  uom_name: string
+  multiplier_to_base: number
+  cost_price: number
+  selling_price: number
+  barcode: string
+  is_base_uom: boolean
+}
+
+const baseUomName = ref('PCS')
+const uomTiers = ref<UomTierItem[]>([
+  { uom_name: 'Piece', multiplier_to_base: 1, cost_price: 0, selling_price: 0, barcode: '', is_base_uom: true }
+])
+
+function addUomTier() {
+  uomTiers.value.push({
+    uom_name: 'Pack',
+    multiplier_to_base: 12,
+    cost_price: 0,
+    selling_price: 0,
+    barcode: '',
+    is_base_uom: false
+  })
+}
+
+function removeUomTier(index: number) {
+  if (uomTiers.value[index].is_base_uom) return
+  uomTiers.value.splice(index, 1)
+}
 
 const isManagerPinModalOpen = ref(false)
 const isEditMode = computed(() => !!props.editProduct)
@@ -63,6 +100,25 @@ async function loadTaxes() {
   }
 }
 
+async function loadProductUoms(productId: string) {
+  try {
+    const fetched = await getProductUOMs(productId)
+    if (fetched.length > 0) {
+      uomTiers.value = fetched.map(u => ({
+        uom_id: u.uom_id,
+        uom_name: u.uom_name,
+        multiplier_to_base: u.multiplier_to_base,
+        cost_price: u.cost_price,
+        selling_price: u.selling_price,
+        barcode: '',
+        is_base_uom: u.is_base_uom
+      }))
+    }
+  } catch (e) {
+    console.warn('Could not load UOMs for product:', e)
+  }
+}
+
 function handleTaxGroupChange() {
   const tg = availableTaxGroups.value.find(g => g.tax_group_id === selectedTaxGroupId.value)
   if (tg) {
@@ -88,6 +144,7 @@ watch(() => props.editProduct, async (prod) => {
     posCategory.value = prod.category || 'general'
     customCategory.value = ''
     await loadTaxes()
+    await loadProductUoms(prod.id)
   }
 }, { immediate: true })
 
@@ -146,18 +203,22 @@ const executeCreateProduct = async () => {
   isSaving.value = true
   try {
     const newId = uuidv4()
-    const finalPrice = Number(salesPrice.value) || 0
+    const finalPrice = 0 // Selling prices & cost rates are established via Purchase Orders in Inventory module
     const finalBarcode = barcode.value.trim() || `OD${Math.floor(1000 + Math.random() * 9000)}`
     const defaultImage = imageUrl.value.trim() || `https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=200`
-    const taxAmt = finalPrice * (salesTaxRate.value / 100)
-    const initQty = Number(initialStock.value) || 50
+    const taxAmt = 0
+    const initQty = 0 // Stock is added strictly via Purchase Orders in Inventory module
     const catName = finalCategoryName.value
+
+    const finalType = settingsStore.posMode === 'retail' 
+      ? (productType.value === 'RAW_MATERIAL' ? 'FINISHED_GOOD' : productType.value)
+      : productType.value
 
     try {
       await db.insert(schema.products).values({
         product_id: newId,
         name: productName.value.trim(),
-        product_type: trackInventory.value ? 'FINISHED_GOOD' : 'SERVICE',
+        product_type: finalType,
         default_price: finalPrice,
         uom: 'PCS',
         barcode: finalBarcode,
@@ -166,12 +227,12 @@ const executeCreateProduct = async () => {
         category: catName
       })
 
-      // Insert Initial Stock into Inventory
+      // Insert Initial Stock Entry into Inventory (0 Pcs, restocked via Purchase Orders)
       await db.insert(schema.inventory).values({
         inventory_id: uuidv4(),
         node_id: 'NODE_POS_001',
         product_id: newId,
-        quantity: initQty,
+        quantity: 0,
         min_stock_alert: 10,
         last_updated: Date.now()
       })
@@ -184,12 +245,18 @@ const executeCreateProduct = async () => {
         movement_type: 'INITIAL_SEED',
         quantity_change: initQty,
         quantity_after: initQty,
-        reference_note: `Product Created with ${salesTaxRate.value}% Tax & ${initQty} Pcs Stock`,
+        reference_note: `Product Created as ${finalType} with ${salesTaxRate.value}% Tax & ${initQty} Pcs Stock`,
         user_name: authStore.currentUser?.name || 'Store Manager',
         created_at: Date.now()
       })
 
       // Insert Product Tax Association
+      // Save Configured Nested UOM Tiers
+      await saveProductUOMs(newId, uomTiers.value.map(u => ({
+        ...u,
+        selling_price: u.is_base_uom ? finalPrice : u.selling_price
+      })))
+
       if (selectedTaxGroupId.value) {
         await db.insert(schema.product_taxes).values({
           product_tax_id: uuidv4(),
@@ -208,7 +275,7 @@ const executeCreateProduct = async () => {
       name: productName.value.trim(),
       category: catName,
       price: finalPrice,
-      type: trackInventory.value ? 'FINISHED_GOOD' : 'SERVICE',
+      type: finalType,
       stock: initQty,
       taxGroupId: selectedTaxGroupId.value || '',
       image: defaultImage,
@@ -241,21 +308,26 @@ const executeUpdateProduct = async () => {
   if (!props.editProduct) return
   isSaving.value = true
   try {
-    const finalPrice = Number(salesPrice.value) || 0
     const finalBarcode = barcode.value.trim() || props.editProduct.barcode
     const finalImage = imageUrl.value.trim() || props.editProduct.image
     const catName = finalCategoryName.value
+    const existingPrice = props.editProduct.price || 0
 
     await db.update(schema.products)
       .set({
         name: productName.value.trim(),
-        default_price: finalPrice,
         barcode: finalBarcode,
         image: finalImage,
         description: productName.value.trim(),
         category: catName
       })
       .where(eq(schema.products.product_id, props.editProduct.id))
+
+    // Save/Update Configured Nested UOM Tiers
+    await saveProductUOMs(props.editProduct.id, uomTiers.value.map(u => ({
+      ...u,
+      selling_price: u.is_base_uom ? existingPrice : (u.selling_price || existingPrice * u.multiplier_to_base)
+    })))
 
     // Update Product Tax Association in SQLite
     try {
@@ -277,16 +349,15 @@ const executeUpdateProduct = async () => {
       productStore.products[idx] = {
         ...productStore.products[idx],
         name: productName.value.trim(),
-        price: finalPrice,
         barcode: finalBarcode,
         image: finalImage,
         category: catName,
         taxGroupId: selectedTaxGroupId.value,
-        taxAmount: finalPrice * (salesTaxRate.value / 100)
+        taxAmount: existingPrice * (salesTaxRate.value / 100)
       }
     }
 
-    toast.success(`Product "${productName.value.trim()}" updated successfully!`)
+    toast.success(`Product definition for "${productName.value.trim()}" updated successfully!`)
     emit('product-updated', props.editProduct.id)
     emit('close')
   } catch (err: any) {
@@ -330,7 +401,37 @@ const executeUpdateProduct = async () => {
             />
           </div>
 
-          <!-- Barcode & SKU -->
+          <!-- Product Type Classification -->
+          <div>
+            <label class="block font-bold text-gray-900 mb-1">Product Type / Classification</label>
+            <select 
+              v-model="productType" 
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#714B67] bg-white"
+            >
+              <option value="FINISHED_GOOD">🛍️ Finished Good / Retail Product (Direct Sale)</option>
+              <option value="SERVICE">🛠️ Service / Non-Stock Item</option>
+              <option value="RAW_MATERIAL" :disabled="settingsStore.posMode === 'retail'">
+                🥗 Raw Material / Recipe Ingredient {{ settingsStore.posMode === 'retail' ? '(Restaurant POS Only)' : '(BOM)' }}
+              </option>
+            </select>
+            <p v-if="settingsStore.posMode === 'retail'" class="text-[10px] text-amber-700 font-semibold mt-1">
+              ℹ️ Raw products are only for Restaurant POS (BOM recipes), not Store POS.
+            </p>
+          </div>
+
+          <!-- Inventory & Price Architecture Notice -->
+          <div class="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-blue-950">
+            <i class="fas fa-info-circle text-blue-600 text-sm mt-0.5 shrink-0"></i>
+            <div>
+              <div class="font-bold">Inventory Stock & Selling Price Management:</div>
+              <p class="text-[11px] text-blue-800 mt-0.5 leading-normal">
+                Product stock additions and active selling rates are established strictly through 
+                <span class="font-bold text-blue-950">Purchase Orders (POs)</span>, <span class="font-bold text-blue-950">Inventory Restocks</span>, and <span class="font-bold text-blue-950">Price Readjustments</span> in the Inventory module.
+              </p>
+            </div>
+          </div>
+
+          <!-- Barcode / SKU & Read-only Current Status (Edit Mode) -->
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block font-bold text-gray-900 mb-1">Barcode / SKU</label>
@@ -341,30 +442,6 @@ const executeUpdateProduct = async () => {
                 class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:border-[#714B67]" 
               />
             </div>
-            <div>
-              <label class="block font-bold text-gray-900 mb-1">Initial Stock (Pcs)</label>
-              <input 
-                v-model.number="initialStock" 
-                type="number" 
-                min="1"
-                placeholder="50" 
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-emerald-700 focus:outline-none focus:border-[#714B67]" 
-              />
-            </div>
-          </div>
-
-          <!-- Price & Tax Group Assignment -->
-          <div class="grid grid-cols-2 gap-3 bg-purple-50/50 p-3 rounded-xl border border-purple-100">
-            <div>
-              <label class="block font-bold text-purple-950 mb-1">Sales Price (Rs)</label>
-              <input 
-                v-model.number="salesPrice" 
-                type="number" 
-                step="0.01" 
-                min="0"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs font-mono font-bold text-gray-900 focus:outline-none focus:border-[#714B67]" 
-              />
-            </div>
 
             <div>
               <label class="block font-bold text-purple-950 mb-1">Assigned Tax Group</label>
@@ -373,7 +450,6 @@ const executeUpdateProduct = async () => {
                 @change="handleTaxGroupChange"
                 class="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-xs font-bold text-purple-900 focus:outline-none focus:border-[#714B67]"
               >
-                <!-- Use DB tax groups if available -->
                 <template v-if="availableTaxGroups.length > 0">
                   <option :value="''">No Tax (0%)</option>
                   <option 
@@ -384,14 +460,78 @@ const executeUpdateProduct = async () => {
                     {{ tg.name }} ({{ tg.rate_percentage }}% — {{ tg.is_inclusive ? 'Inclusive' : 'Exclusive' }})
                   </option>
                 </template>
-                <!-- Fallback when no tax groups exist in DB -->
                 <template v-else>
                   <option :value="''">No Tax Groups (0%)</option>
                 </template>
               </select>
-              <p v-if="availableTaxGroups.length === 0" class="text-[10px] text-amber-600 mt-1">
-                ⚠️ No item tax groups in DB — go to Manager → Tax Rules & Setup to add tax groups.
-              </p>
+            </div>
+          </div>
+
+          <!-- Current Inventory & Active Selling Price Status (Edit Mode) -->
+          <div v-if="isEditMode" class="grid grid-cols-2 gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200 text-xs">
+            <div>
+              <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Inventory Stock</span>
+              <div class="font-mono font-bold text-emerald-700 text-sm mt-0.5">
+                {{ editProduct?.stock || 0 }} Pcs
+              </div>
+            </div>
+            <div>
+              <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Active Selling Price</span>
+              <div class="font-mono font-bold text-purple-900 text-sm mt-0.5">
+                Rs {{ (editProduct?.price || 0).toFixed(2) }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Nested UOM Hierarchy Builder Card -->
+          <div class="bg-purple-50/70 border border-purple-200 rounded-xl p-3.5 space-y-3">
+            <div class="flex justify-between items-center">
+              <div>
+                <h4 class="font-bold text-xs text-purple-950 uppercase tracking-wider">
+                  <i class="fas fa-boxes text-[#714B67] mr-1"></i> Nested Units of Measure (UOM) Hierarchy
+                </h4>
+                <p class="text-[11px] text-gray-500">Configure upper packaging tiers (Piece ➔ Pack ➔ Box ➔ Carton) and multipliers relative to Base Unit.</p>
+              </div>
+              <button 
+                @click="addUomTier" 
+                type="button" 
+                class="text-xs px-2.5 py-1 bg-[#714B67] text-white rounded-lg font-bold hover:bg-[#5a3a52] transition-colors cursor-pointer"
+              >
+                + Add UOM Tier
+              </button>
+            </div>
+
+            <div class="space-y-2">
+              <div 
+                v-for="(uom, idx) in uomTiers" 
+                :key="idx" 
+                class="grid grid-cols-12 gap-2 bg-white p-2.5 rounded-lg border border-purple-100 items-center text-xs"
+              >
+                <div class="col-span-5">
+                  <label class="block text-[10px] font-bold text-gray-500 mb-0.5">Tier Name</label>
+                  <input v-model="uom.uom_name" type="text" placeholder="e.g. Box" class="w-full px-2 py-1 border border-gray-300 rounded font-bold text-gray-900" />
+                </div>
+                <div class="col-span-4">
+                  <label class="block text-[10px] font-bold text-gray-500 mb-0.5">Base Multiplier</label>
+                  <div class="flex items-center gap-1">
+                    <input 
+                      v-model.number="uom.multiplier_to_base" 
+                      type="number" 
+                      min="0.001" 
+                      step="any" 
+                      :disabled="uom.is_base_uom" 
+                      class="w-full px-2 py-1 border border-gray-300 rounded font-mono font-bold text-purple-900" 
+                    />
+                    <span class="text-[10px] text-gray-400 font-bold shrink-0">Pcs</span>
+                  </div>
+                </div>
+                <div class="col-span-3 flex items-center justify-end gap-1 pt-3">
+                  <span v-if="uom.is_base_uom" class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">Base Unit</span>
+                  <button v-else @click="removeUomTier(idx)" type="button" class="text-xs text-rose-600 hover:text-rose-800 font-bold p-1">
+                    <i class="fas fa-trash-alt"></i> Remove
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

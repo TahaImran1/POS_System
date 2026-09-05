@@ -160,17 +160,15 @@ onUnmounted(() => {
               ]"
               class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs"
             >
-              <i v-if="u.role === 'DEVELOPER'" class="fas fa-code"></i>
-              <i v-else-if="u.role === 'MANAGER'" class="fas fa-user-tie"></i>
-              <i v-else class="fas fa-cash-register"></i>
+              <i class="fas fa-user-shield"></i>
             </div>
             <div class="min-w-0 flex-1">
               <div class="font-bold text-xs truncate leading-tight">{{ u.name }}</div>
               <div 
                 :class="selectedUser?.user_id === u.user_id ? 'text-amber-200' : 'text-gray-400'"
-                class="text-[10px] uppercase font-semibold tracking-wider truncate"
+                class="text-[10px] font-semibold tracking-wider truncate"
               >
-                {{ u.role }}
+                {{ u.designation || u.role || 'Staff Member' }}
               </div>
             </div>
           </button>

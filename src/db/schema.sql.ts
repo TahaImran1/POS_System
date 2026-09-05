@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS \`products\` (
 	\`name\` text NOT NULL,
 	\`product_type\` text NOT NULL,
 	\`default_price\` real DEFAULT 0 NOT NULL,
+	\`cost_price\` real DEFAULT 0 NOT NULL,
 	\`uom\` text DEFAULT 'PCS' NOT NULL,
 	\`image\` text,
 	\`description\` text,
@@ -169,10 +170,14 @@ CREATE TABLE IF NOT EXISTS \`users\` (
 	\`username\` text NOT NULL UNIQUE,
 	\`name\` text NOT NULL,
 	\`pin\` text NOT NULL,
-	\`role\` text NOT NULL,
+	\`role\` text DEFAULT 'SALESPERSON' NOT NULL,
+	\`designation\` text DEFAULT 'Staff Member' NOT NULL,
+	\`rights\` text,
+	\`reports_to_user_id\` text,
 	\`node_id\` text,
 	\`created_at\` integer,
-	FOREIGN KEY (\`node_id\`) REFERENCES \`nodes\`(\`node_id\`) ON UPDATE no action ON DELETE no action
+	FOREIGN KEY (\`node_id\`) REFERENCES \`nodes\`(\`node_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`reports_to_user_id\`) REFERENCES \`users\`(\`user_id\`) ON UPDATE no action ON DELETE no action
 );
 
 CREATE TABLE IF NOT EXISTS \`app_settings\` (
@@ -180,6 +185,121 @@ CREATE TABLE IF NOT EXISTS \`app_settings\` (
 	\`key\` text NOT NULL UNIQUE,
 	\`value\` text NOT NULL,
 	\`updated_at\` integer
+);
+
+CREATE TABLE IF NOT EXISTS \`product_price_history\` (
+	\`history_id\` text PRIMARY KEY NOT NULL,
+	\`product_id\` text NOT NULL,
+	\`old_price\` real NOT NULL,
+	\`new_price\` real NOT NULL,
+	\`change_reason\` text,
+	\`user_name\` text,
+	\`created_at\` integer,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`sales_returns\` (
+	\`return_id\` text PRIMARY KEY NOT NULL,
+	\`origin_sale_id\` text NOT NULL,
+	\`session_id\` text,
+	\`node_id\` text,
+	\`return_type\` text DEFAULT 'PARTIAL' NOT NULL,
+	\`total_refund_credit\` real DEFAULT 0 NOT NULL,
+	\`total_new_charges\` real DEFAULT 0 NOT NULL,
+	\`net_settlement\` real DEFAULT 0 NOT NULL,
+	\`refund_method\` text DEFAULT 'Cash' NOT NULL,
+	\`user_name\` text,
+	\`reason\` text,
+	\`created_at\` integer,
+	FOREIGN KEY (\`origin_sale_id\`) REFERENCES \`sales\`(\`sale_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`sales_return_items\` (
+	\`return_item_id\` text PRIMARY KEY NOT NULL,
+	\`return_id\` text NOT NULL,
+	\`sale_item_id\` text,
+	\`product_id\` text NOT NULL,
+	\`quantity_returned\` real NOT NULL,
+	\`old_unit_price\` real NOT NULL,
+	\`item_condition\` text DEFAULT 'RESTOCKABLE' NOT NULL,
+	\`refund_subtotal\` real NOT NULL,
+	FOREIGN KEY (\`return_id\`) REFERENCES \`sales_returns\`(\`return_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`vendors\` (
+	\`vendor_id\` text PRIMARY KEY NOT NULL,
+	\`name\` text NOT NULL,
+	\`company_name\` text,
+	\`phone\` text,
+	\`email\` text,
+	\`address\` text,
+	\`balance\` real DEFAULT 0 NOT NULL,
+	\`created_at\` integer
+);
+
+CREATE TABLE IF NOT EXISTS \`damaged_expired_hold\` (
+	\`hold_id\` text PRIMARY KEY NOT NULL,
+	\`sale_return_id\` text,
+	\`product_id\` text NOT NULL,
+	\`quantity\` real NOT NULL,
+	\`cost_price\` real NOT NULL,
+	\`condition\` text DEFAULT 'DAMAGED_HOLD' NOT NULL,
+	\`status\` text DEFAULT 'PENDING_CLAIM' NOT NULL,
+	\`reclaimed_vendor_id\` text,
+	\`debit_note_id\` text,
+	\`created_at\` integer,
+	FOREIGN KEY (\`sale_return_id\`) REFERENCES \`sales_returns\`(\`return_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`reclaimed_vendor_id\`) REFERENCES \`vendors\`(\`vendor_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`vendor_payments\` (
+	\`payment_id\` text PRIMARY KEY NOT NULL,
+	\`vendor_id\` text NOT NULL,
+	\`po_id\` text,
+	\`session_id\` text,
+	\`amount\` real NOT NULL,
+	\`debit_note_amount\` real DEFAULT 0 NOT NULL,
+	\`payment_method\` text DEFAULT 'Cash' NOT NULL,
+	\`user_name\` text,
+	\`notes\` text,
+	\`created_at\` integer,
+	FOREIGN KEY (\`vendor_id\`) REFERENCES \`vendors\`(\`vendor_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`session_id\`) REFERENCES \`cash_sessions\`(\`session_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`product_uom\` (
+	\`uom_id\` text PRIMARY KEY NOT NULL,
+	\`product_id\` text NOT NULL,
+	\`uom_name\` text NOT NULL,
+	\`multiplier_to_base\` real DEFAULT 1 NOT NULL,
+	\`cost_price\` real DEFAULT 0 NOT NULL,
+	\`selling_price\` real DEFAULT 0 NOT NULL,
+	\`is_base_uom\` integer DEFAULT 0 NOT NULL,
+	\`created_at\` integer,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`product_barcodes\` (
+	\`barcode_id\` text PRIMARY KEY NOT NULL,
+	\`barcode\` text NOT NULL UNIQUE,
+	\`product_id\` text NOT NULL,
+	\`uom_id\` text,
+	\`created_at\` integer,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`uom_id\`) REFERENCES \`product_uom\`(\`uom_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`vendor_product_prices\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`vendor_id\` text NOT NULL,
+	\`product_id\` text NOT NULL,
+	\`uom_name\` text DEFAULT 'PCS' NOT NULL,
+	\`last_buying_price\` real DEFAULT 0 NOT NULL,
+	\`updated_at\` integer,
+	FOREIGN KEY (\`vendor_id\`) REFERENCES \`vendors\`(\`vendor_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action
 );
 `
 

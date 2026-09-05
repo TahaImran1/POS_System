@@ -51,25 +51,39 @@ const save = () => {
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">POS Mode</label>
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-sm font-medium text-gray-700">POS Mode</label>
+            <span class="text-[10px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">DEV SWITCH</span>
+          </div>
+          
+          <div class="p-2.5 bg-amber-50 rounded-lg border border-amber-200 text-xs text-amber-900 mb-3 space-y-1">
+            <div class="font-bold flex items-center gap-1">
+              <i class="fas fa-exclamation-triangle text-amber-600"></i>
+              <span>Immutable Node Declaration Note:</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-amber-800">
+              In actual production, POS type (Store vs Restaurant) is declared once during setup and never changed. This mode switch is provided for development testing.
+            </p>
+          </div>
+
           <div class="grid grid-cols-2 gap-4">
             <button 
               @click="localMode = 'retail'"
-              :class="['border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all', localMode === 'retail' ? 'border-[#714B67] bg-pink-50 text-[#714B67] ring-2 ring-[#714B67]/20' : 'border-gray-200 text-gray-500 hover:bg-gray-50']"
+              :class="['border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer', localMode === 'retail' ? 'border-[#714B67] bg-pink-50 text-[#714B67] ring-2 ring-[#714B67]/20 font-bold' : 'border-gray-200 text-gray-500 hover:bg-gray-50']"
             >
               <i class="fas fa-shopping-cart text-2xl"></i>
-              <span class="font-medium">Retail</span>
+              <span class="font-medium">Store / Retail</span>
             </button>
             <button 
               @click="localMode = 'restaurant'"
-              :class="['border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all', localMode === 'restaurant' ? 'border-[#714B67] bg-pink-50 text-[#714B67] ring-2 ring-[#714B67]/20' : 'border-gray-200 text-gray-500 hover:bg-gray-50']"
+              :class="['border rounded-lg p-4 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer', localMode === 'restaurant' ? 'border-[#714B67] bg-pink-50 text-[#714B67] ring-2 ring-[#714B67]/20 font-bold' : 'border-gray-200 text-gray-500 hover:bg-gray-50']"
             >
               <i class="fas fa-utensils text-2xl"></i>
               <span class="font-medium">Restaurant</span>
             </button>
           </div>
           <p class="text-xs text-gray-500 mt-2">
-            Restaurant mode enables Table Number prompts when creating new orders.
+            Restaurant mode enables Table Number canvas and raw material ingredient BOMs. Store mode restricts products to finished goods.
           </p>
         </div>
       </div>

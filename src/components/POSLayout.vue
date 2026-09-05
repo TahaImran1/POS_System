@@ -286,13 +286,21 @@ const handleSessionClosed = () => {
         <!-- Divider -->
         <div class="w-px h-5 bg-gray-300"></div>
 
-        <!-- Mode Badge -->
-        <span 
-          class="px-2.5 py-1 rounded text-[11px] font-black uppercase text-white shadow-2xs tracking-wider flex items-center gap-1 shrink-0"
-          :class="isRestaurant ? 'bg-[#714B67]' : 'bg-[#00A09D]'"
-        >
-          <span>{{ isRestaurant ? '🍽️ Restaurant POS' : '🛒 Store / Retail POS' }}</span>
-        </span>
+        <!-- Mode Badge & DEV Helper Tag -->
+        <div class="flex items-center gap-1.5">
+          <span 
+            class="px-2.5 py-1 rounded text-[11px] font-black uppercase text-white shadow-2xs tracking-wider flex items-center gap-1 shrink-0"
+            :class="isRestaurant ? 'bg-[#714B67]' : 'bg-[#00A09D]'"
+          >
+            <span>{{ isRestaurant ? '🍽️ Restaurant POS' : '🛒 Store / Retail POS' }}</span>
+          </span>
+          <span 
+            class="text-[9px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 uppercase tracking-wider cursor-help" 
+            title="POS Mode is declared once at node setup time and cannot be changed in production. Mode switch is for local development testing only."
+          >
+            [DEV SWITCH]
+          </span>
+        </div>
 
         <!-- Restaurant Mode: Tables Canvas Button -->
         <button 

@@ -5,6 +5,8 @@ import { db } from '../db/client'
 import * as schema from '../db/schema'
 import { desc, eq } from 'drizzle-orm'
 
+import SaleReturnModal from '../components/modals/SaleReturnModal.vue'
+
 const emit = defineEmits(['load-order'])
 const cartStore = useCartStore()
 
@@ -12,6 +14,7 @@ const searchQuery = ref('')
 const selectedFilter = ref('All')
 const completedOrders = ref<any[]>([])
 const selectedOrderId = ref<string | null>(null)
+const isReturnModalOpen = ref(false)
 
 // Fetch completed sales from SQLite database
 async function loadCompletedSales() {
@@ -278,7 +281,24 @@ const handleLoadOrder = () => {
           <i class="fas fa-edit"></i>
           <span>Continue / Edit Ticket Order</span>
         </button>
+
+        <button 
+          v-else
+          @click="isReturnModalOpen = true"
+          class="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <i class="fas fa-undo"></i>
+          <span>Process Return & Exchange</span>
+        </button>
       </div>
     </div>
+
+    <!-- Sales Return Modal -->
+    <SaleReturnModal 
+      :show="isReturnModalOpen" 
+      :initialSaleId="selectedOrder?.id"
+      @close="isReturnModalOpen = false"
+      @return-success="loadCompletedSales"
+    />
   </div>
 </template>
