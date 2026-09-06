@@ -294,12 +294,6 @@ const handleSessionClosed = () => {
           >
             <span>{{ isRestaurant ? '🍽️ Restaurant POS' : '🛒 Store / Retail POS' }}</span>
           </span>
-          <span 
-            class="text-[9px] font-extrabold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300 uppercase tracking-wider cursor-help" 
-            title="POS Mode is declared once at node setup time and cannot be changed in production. Mode switch is for local development testing only."
-          >
-            [DEV SWITCH]
-          </span>
         </div>
 
         <!-- Restaurant Mode: Tables Canvas Button -->

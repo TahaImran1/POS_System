@@ -1,6 +1,6 @@
 {
   "name": "pos_system",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Enterprise Universal Multi-Branch Point of Sale System",
   "main": "electron/main.cjs",
   "type": "module",
@@ -52,6 +52,7 @@
   "dependencies": {
     "@fastify/static": "^10.1.2",
     "@fastify/websocket": "^11.0.2",
+    "@fortawesome/fontawesome-free": "^7.3.1",
     "@sqlite.org/sqlite-wasm": "^3.53.0-build1",
     "better-sqlite3": "^11.8.1",
     "dotenv": "^16.4.7",
@@ -66,8 +67,6 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.10.10",
     "@types/pg": "^8.11.10",
@@ -77,6 +76,8 @@
     "@vue/tsconfig": "^0.9.1",
     "autoprefixer": "^10.5.4",
     "drizzle-kit": "^0.30.6",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
     "postcss": "^8.5.23",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.19.2",

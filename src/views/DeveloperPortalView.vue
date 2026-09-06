@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useMasterDbStore, type BranchNode } from '../stores/useMasterDbStore'
 import { useAuthStore, SYSTEM_RIGHTS, getDefaultRightsForUser, isRootSuperDeveloper, type UserAccount } from '../stores/useAuthStore'
 import { useNodeConfigStore } from '../stores/useNodeConfigStore'
+import { useSettingsStore } from '../stores/useSettingsStore'
 import { useUpdateStore } from '../stores/useUpdateStore'
 import { exportDatabase, saveDbToCustomFolder } from '../db/client'
 import { useToast } from '../composables/useToast'
@@ -12,6 +13,7 @@ const emit = defineEmits(['open-pos', 'open-manager'])
 const masterDbStore = useMasterDbStore()
 const authStore = useAuthStore()
 const nodeConfigStore = useNodeConfigStore()
+const settingsStore = useSettingsStore()
 const updateStore = useUpdateStore()
 const toast = useToast()
 
@@ -342,6 +344,43 @@ async function handlePurgeDatabase() {
     <!-- TAB 1: DB LOCATION & DIAGNOSTICS -->
     <div v-if="activeTab === 'diagnostics'" class="space-y-6">
       
+      <!-- Immutable Installed Terminal Identity Card -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-3">
+        <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+          <div>
+            <h3 class="font-bold text-base text-gray-900 flex items-center space-x-2">
+              <i class="fas fa-shield-alt text-[#714B67]"></i>
+              <span>Installed Terminal Identity (Immutable)</span>
+            </h3>
+            <p class="text-xs text-gray-500 mt-0.5">Configured at initial installation setup. Switching POS type or store name is disabled in the installed application.</p>
+          </div>
+          <span class="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+            <i class="fas fa-lock text-[9px]"></i>
+            <span>Locked &amp; Active</span>
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1 text-xs">
+          <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+            <span class="text-gray-500 font-medium block">Configured Store / Outlet Name</span>
+            <div class="text-sm font-bold text-gray-900 mt-1 flex items-center gap-2">
+              <i class="fas fa-store text-[#714B67]"></i>
+              <span>{{ settingsStore.storeName || 'Main Store' }}</span>
+            </div>
+            <span class="text-[10px] text-gray-400 mt-1 block">Permanent store identifier</span>
+          </div>
+
+          <div class="p-3.5 bg-gray-50 rounded-xl border border-gray-200">
+            <span class="text-gray-500 font-medium block">Configured POS Workspace Type</span>
+            <div class="text-sm font-bold text-gray-900 mt-1 flex items-center gap-2">
+              <i :class="settingsStore.posMode === 'restaurant' ? 'fas fa-utensils text-[#714B67]' : 'fas fa-shopping-cart text-[#714B67]'"></i>
+              <span>{{ settingsStore.posMode === 'restaurant' ? 'Restaurant POS (Table Canvas, KOT)' : 'Store / Retail POS (Barcode Scanner Grid)' }}</span>
+            </div>
+            <span class="text-[10px] text-gray-400 mt-1 block">Permanent operational mode</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Database File Path & Manual Deletion Info Card -->
       <div class="bg-white p-6 rounded-2xl shadow-sm border border-purple-900/10 space-y-4">
         <div class="flex justify-between items-center border-b border-gray-100 pb-3">
