@@ -22,8 +22,8 @@ const errorMsg = ref('')
 
 // Restore last active view from sessionStorage to survive HMR & full page reloads
 const SESSION_VIEW_KEY = 'pos_active_view'
-const _savedView = sessionStorage.getItem(SESSION_VIEW_KEY) as 'portal' | 'dashboard' | 'terminal' | 'node_config' | null
-const currentAppView = ref<'portal' | 'dashboard' | 'terminal' | 'node_config'>(_savedView || 'portal')
+const _savedView = sessionStorage.getItem(SESSION_VIEW_KEY) as 'portal' | 'dashboard' | 'terminal' | 'manager' | 'developer' | 'node_config' | null
+const currentAppView = ref<'portal' | 'dashboard' | 'terminal' | 'manager' | 'developer' | 'node_config'>(_savedView || 'portal')
 
 const authStore = useAuthStore()
 const masterDbStore = useMasterDbStore()
@@ -106,60 +106,122 @@ function handleRoleChanged() {
       <!-- Universal Master Top Bar for System Navigation & Role Badge -->
       <header class="h-10 bg-[#3f2538] text-white flex items-center justify-between px-3 text-xs font-semibold shrink-0 z-40 shadow-xs border-b border-white/10">
         <div class="flex items-center gap-3">
-          <div class="flex items-center gap-1.5 font-bold cursor-pointer">
+          <div class="flex items-center gap-1.5 font-bold cursor-pointer" @click="currentAppView = 'portal'">
             <i class="fas fa-[#e0a96d] fa-shield-alt"></i>
             <span class="text-sm tracking-tight text-amber-200 font-extrabold">POS Enterprise</span>
           </div>
 
+          <!-- Master Multi-Module Navigation Tabs for Developer & Privileged Users -->
+          <nav v-if="authStore.isAuthenticated" class="flex items-center gap-1 ml-2">
+            <!-- POS Terminal -->
+            <button 
+              @click="currentAppView = 'terminal'"
+              :class="[
+                'px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer',
+                currentAppView === 'terminal' 
+                  ? 'bg-amber-400 text-gray-900 shadow-xs' 
+                  : 'bg-white/10 text-white/90 hover:bg-white/20'
+              ]"
+              title="Open Live POS Register & Floor Plan"
+            >
+              <i class="fas fa-cash-register"></i>
+              <span>POS Register</span>
+            </button>
 
+            <!-- Manager Portal (Products, BOM, Taxes, Stock, Reports) -->
+            <button 
+              v-if="authStore.hasManagerPrivileges"
+              @click="currentAppView = 'manager'"
+              :class="[
+                'px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer',
+                currentAppView === 'manager' || (!authStore.isDeveloper && currentAppView === 'portal' && authStore.isManager)
+                  ? 'bg-purple-600 text-white shadow-xs ring-1 ring-purple-300/40' 
+                  : 'bg-white/10 text-white/90 hover:bg-white/20'
+              ]"
+              title="Open Manager Portal: Products, Recipes, Inventory, Taxes & Sales Reports"
+            >
+              <i class="fas fa-briefcase"></i>
+              <span>Manager Portal</span>
+            </button>
+
+            <!-- Developer Portal (Diagnostics, Cloud Sync & System Settings) -->
+            <button 
+              v-if="authStore.isDeveloper"
+              @click="currentAppView = 'developer'"
+              :class="[
+                'px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer',
+                currentAppView === 'developer' || (authStore.isDeveloper && currentAppView === 'portal')
+                  ? 'bg-blue-600 text-white shadow-xs ring-1 ring-blue-300/40' 
+                  : 'bg-white/10 text-white/90 hover:bg-white/20'
+              ]"
+              title="Open Developer Settings, DB Diagnostics, and User Rights"
+            >
+              <i class="fas fa-code"></i>
+              <span>Developer Portal</span>
+            </button>
+
+            <!-- Node & Cloud Sync -->
+            <button 
+              v-if="authStore.isDeveloper"
+              @click="currentAppView = currentAppView === 'node_config' ? 'developer' : 'node_config'"
+              :class="[
+                'px-2.5 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer',
+                currentAppView === 'node_config' 
+                  ? 'bg-emerald-600 text-white shadow-xs' 
+                  : 'bg-white/10 text-white/80 hover:bg-white/20'
+              ]"
+              title="Branch Hierarchy & Cloud VPS Sync"
+            >
+              <i class="fas fa-network-wired"></i>
+              <span>Node & Sync</span>
+            </button>
+          </nav>
         </div>
 
         <div class="flex items-center gap-3">
-          <!-- Active Mode Info -->
+          <!-- Active Role / Account Info -->
           <div class="text-[11px] text-amber-200/90 font-mono hidden md:block">
-            Mode: <span class="font-bold text-white">{{ authStore.roleLabel }}</span>
+            User: <span class="font-bold text-white">{{ authStore.roleLabel }}</span>
           </div>
 
-          <button 
-            v-if="authStore.isDeveloper"
-            @click="currentAppView = currentAppView === 'node_config' ? 'portal' : 'node_config'"
-            :class="currentAppView === 'node_config' ? 'bg-emerald-600 text-white font-bold' : 'bg-white/10 text-white/80 hover:bg-white/20'"
-            class="px-2.5 py-1 rounded text-xs flex items-center gap-1.5 shadow-xs transition-colors"
-          >
-            <i class="fas fa-network-wired"></i> Node & Sync
-          </button>
-
-          <button @click="authStore.showLoginModal = true" class="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-gray-900 font-bold rounded text-xs flex items-center gap-1.5 shadow-xs transition-colors">
+          <button @click="authStore.showLoginModal = true" class="px-2.5 py-1 bg-amber-400 hover:bg-amber-500 text-gray-900 font-bold rounded text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer">
             <i class="fas fa-key"></i> Switch PIN / Account
           </button>
         </div>
       </header>
 
-      <!-- Main Body View according to Role -->
+      <!-- Main Body View according to Active Selection -->
       <div class="flex-1 overflow-hidden relative">
         <!-- NODE CONFIG & SYNC VIEW -->
         <NodeConfigView v-if="currentAppView === 'node_config'" />
 
-        <!-- DEVELOPER ROLE VIEW -->
-        <DeveloperPortalView v-else-if="authStore.isDeveloper && currentAppView !== 'terminal'" />
+        <!-- LIVE POS REGISTER TERMINAL -->
+        <POSLayout 
+          v-else-if="currentAppView === 'terminal'" 
+          @back-to-dashboard="currentAppView = authStore.isDeveloper ? 'developer' : (authStore.hasManagerPrivileges ? 'manager' : 'dashboard')" 
+        />
 
-        <!-- MANAGER ROLE VIEW -->
+        <!-- MANAGER PORTAL (Products, BOM, Taxes, Stock, Reports) -->
         <ManagerPortalView 
-          v-else-if="authStore.isManager && currentAppView !== 'terminal'" 
+          v-else-if="currentAppView === 'manager' || (!authStore.isDeveloper && authStore.isManager && currentAppView === 'portal')" 
           @open-pos="currentAppView = 'terminal'" 
         />
 
-        <!-- SALESPERSON ROLE VIEW & POS TERMINAL -->
-        <template v-else>
-          <POSDashboardView 
-            v-if="currentAppView !== 'terminal'" 
-            @open-pos="currentAppView = 'terminal'"
-            @open-orders="currentAppView = 'terminal'"
-            @open-products="currentAppView = 'terminal'"
-            @open-settings="currentAppView = 'terminal'"
-          />
-          <POSLayout v-else @back-to-dashboard="currentAppView = 'portal'" />
-        </template>
+        <!-- DEVELOPER PORTAL VIEW -->
+        <DeveloperPortalView 
+          v-else-if="currentAppView === 'developer' || (authStore.isDeveloper && currentAppView === 'portal')" 
+          @open-pos="currentAppView = 'terminal'"
+          @open-manager="currentAppView = 'manager'"
+        />
+
+        <!-- SALESPERSON ROLE VIEW & POS DASHBOARD -->
+        <POSDashboardView 
+          v-else
+          @open-pos="currentAppView = 'terminal'"
+          @open-orders="currentAppView = 'terminal'"
+          @open-products="currentAppView = 'terminal'"
+          @open-settings="currentAppView = 'terminal'"
+        />
       </div>
     </div>
 

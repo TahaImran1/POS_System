@@ -86,6 +86,8 @@ export const cash_sessions = sqliteTable('cash_sessions', {
   expected_closing_balance: real('expected_closing_balance').default(0),
   closing_cash_counted: real('closing_cash_counted'),
   cash_variance: real('cash_variance'),
+  closing_notes_breakdown: text('closing_notes_breakdown'),
+  closing_note: text('closing_note'),
   status: text('status').notNull().default('OPEN'), // OPEN, CLOSED
   opened_at: integer('opened_at'),
   closed_at: integer('closed_at')
@@ -285,4 +287,21 @@ export const vendor_product_prices = sqliteTable('vendor_product_prices', {
   uom_name: text('uom_name').notNull().default('PCS'),
   last_buying_price: real('last_buying_price').notNull().default(0),
   updated_at: integer('updated_at')
+})
+
+export const vendor_purchases = sqliteTable('vendor_purchases', {
+  purchase_id: text('purchase_id').primaryKey(),
+  vendor_id: text('vendor_id').notNull().references(() => vendors.vendor_id),
+  po_id: text('po_id').notNull(),
+  product_id: text('product_id').notNull().references(() => products.product_id),
+  product_name: text('product_name').notNull(),
+  product_barcode: text('product_barcode'),
+  quantity: real('quantity').notNull(),
+  uom_name: text('uom_name').notNull().default('PCS'),
+  uom_multiplier: real('uom_multiplier').notNull().default(1),
+  unit_cost: real('unit_cost').notNull().default(0),
+  total_cost: real('total_cost').notNull().default(0),
+  reference_note: text('reference_note'),
+  user_name: text('user_name'),
+  created_at: integer('created_at').notNull()
 })

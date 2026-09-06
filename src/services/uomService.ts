@@ -14,6 +14,80 @@ export interface ProductUOM {
   created_at: number
 }
 
+export const UOM_CATEGORIES = [
+  'Count / Packaging',
+  'Weight / Mass',
+  'Volume / Liquid',
+  'Length / Area'
+] as const
+
+export type UomCategory = typeof UOM_CATEGORIES[number]
+
+export interface StandardUOM {
+  code: string
+  name: string
+  symbol: string
+  category: UomCategory
+}
+
+export const RETAIL_UOM_PRESETS: StandardUOM[] = [
+  // Count & Individual Units
+  { code: 'PCS', name: 'Piece', symbol: 'pcs', category: 'Count / Packaging' },
+  { code: 'PACK', name: 'Pack', symbol: 'pk', category: 'Count / Packaging' },
+  { code: 'BOX', name: 'Box', symbol: 'bx', category: 'Count / Packaging' },
+  { code: 'CARTON', name: 'Carton', symbol: 'ctn', category: 'Count / Packaging' },
+  { code: 'DOZEN', name: 'Dozen (12 pcs)', symbol: 'dz', category: 'Count / Packaging' },
+  { code: 'PAIR', name: 'Pair', symbol: 'pr', category: 'Count / Packaging' },
+  { code: 'SET', name: 'Set', symbol: 'set', category: 'Count / Packaging' },
+  { code: 'BOTTLE', name: 'Bottle', symbol: 'btl', category: 'Count / Packaging' },
+  { code: 'CAN', name: 'Can', symbol: 'can', category: 'Count / Packaging' },
+  { code: 'SACHET', name: 'Sachet / Pouch', symbol: 'sachet', category: 'Count / Packaging' },
+  { code: 'BAG', name: 'Bag / Sack', symbol: 'bag', category: 'Count / Packaging' },
+  { code: 'JAR', name: 'Jar / Tub', symbol: 'jar', category: 'Count / Packaging' },
+  { code: 'STRIP', name: 'Strip / Blister', symbol: 'strip', category: 'Count / Packaging' },
+  { code: 'ROLL', name: 'Roll', symbol: 'roll', category: 'Count / Packaging' },
+  { code: 'BUNDLE', name: 'Bundle', symbol: 'bdl', category: 'Count / Packaging' },
+
+  // Weight & Mass
+  { code: 'KG', name: 'Kilogram', symbol: 'kg', category: 'Weight / Mass' },
+  { code: 'G', name: 'Gram', symbol: 'g', category: 'Weight / Mass' },
+  { code: 'MG', name: 'Milligram', symbol: 'mg', category: 'Weight / Mass' },
+  { code: 'LB', name: 'Pound', symbol: 'lb', category: 'Weight / Mass' },
+  { code: 'OZ', name: 'Ounce', symbol: 'oz', category: 'Weight / Mass' },
+  { code: 'TON', name: 'Metric Ton', symbol: 't', category: 'Weight / Mass' },
+
+  // Volume & Liquid
+  { code: 'L', name: 'Liter', symbol: 'L', category: 'Volume / Liquid' },
+  { code: 'ML', name: 'Milliliter', symbol: 'ml', category: 'Volume / Liquid' },
+  { code: 'GAL', name: 'Gallon', symbol: 'gal', category: 'Volume / Liquid' },
+  { code: 'FL_OZ', name: 'Fluid Ounce', symbol: 'fl oz', category: 'Volume / Liquid' },
+  { code: 'PT', name: 'Pint', symbol: 'pt', category: 'Volume / Liquid' },
+
+  // Length & Area
+  { code: 'M', name: 'Meter', symbol: 'm', category: 'Length / Area' },
+  { code: 'CM', name: 'Centimeter', symbol: 'cm', category: 'Length / Area' },
+  { code: 'MM', name: 'Millimeter', symbol: 'mm', category: 'Length / Area' },
+  { code: 'FT', name: 'Foot / Feet', symbol: 'ft', category: 'Length / Area' },
+  { code: 'IN', name: 'Inch', symbol: 'in', category: 'Length / Area' },
+  { code: 'YD', name: 'Yard', symbol: 'yd', category: 'Length / Area' },
+  { code: 'SQM', name: 'Square Meter', symbol: 'm²', category: 'Length / Area' },
+  { code: 'SQFT', name: 'Square Feet', symbol: 'sq ft', category: 'Length / Area' },
+]
+
+export function getUomsByCategory(category: string): StandardUOM[] {
+  return RETAIL_UOM_PRESETS.filter(u => u.category === category)
+}
+
+export function getUomSymbol(codeOrName: string): string {
+  if (!codeOrName) return 'pcs'
+  const found = RETAIL_UOM_PRESETS.find(
+    u => u.code.toUpperCase() === codeOrName.toUpperCase() || 
+         u.name.toUpperCase() === codeOrName.toUpperCase() || 
+         u.symbol.toUpperCase() === codeOrName.toUpperCase()
+  )
+  return found ? found.symbol : codeOrName
+}
+
 export interface BarcodeResolveResult {
   found: boolean
   product?: any

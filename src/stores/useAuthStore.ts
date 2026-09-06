@@ -3,6 +3,7 @@ import { db } from '../db/client'
 import * as schema from '../db/schema'
 import { v4 as uuidv4 } from 'uuid'
 import { eq } from 'drizzle-orm'
+import { hashPin, isHashedPin, comparePin } from '../utils/crypto'
 
 export type UserRole = 'DEVELOPER' | 'MANAGER' | 'SALESPERSON'
 
@@ -154,6 +155,20 @@ export const useAuthStore = defineStore('auth', {
     async loadUsers() {
       try {
         const loadedUsers = await db.select().from(schema.users)
+
+        // Dynamic Migration: automatically hash legacy plain-text PINs found in DB
+        for (const u of loadedUsers as any[]) {
+          if (u.pin && !isHashedPin(u.pin)) {
+            try {
+              const secureHash = await hashPin(u.pin)
+              await db.update(schema.users).set({ pin: secureHash } as any).where(eq(schema.users.user_id, u.user_id))
+              u.pin = secureHash
+            } catch (err) {
+              console.warn(`Could not migrate PIN for user ${u.username}:`, err)
+            }
+          }
+        }
+
         this.users = (loadedUsers as any[]).map(u => ({
           ...u,
           designation: u.designation || (isRootSuperDeveloper(u) ? 'Developer / Super Admin' : 'Staff Member'),
@@ -173,12 +188,19 @@ export const useAuthStore = defineStore('auth', {
 
       let match: UserAccount | undefined
       if (targetUserId) {
-        match = this.users.find(u => u.user_id === targetUserId && u.pin === cleanPin)
-        if (!match) {
+        const target = this.users.find(u => u.user_id === targetUserId)
+        if (target && (await comparePin(cleanPin, target.pin))) {
+          match = target
+        } else {
           return { success: false, error: 'Incorrect PIN for the selected user account.' }
         }
       } else {
-        match = this.users.find(u => u.pin === cleanPin)
+        for (const u of this.users) {
+          if (await comparePin(cleanPin, u.pin)) {
+            match = u
+            break
+          }
+        }
         if (!match) {
           return { success: false, error: 'Invalid PIN. No matching user account found.' }
         }
@@ -200,20 +222,26 @@ export const useAuthStore = defineStore('auth', {
       return { success: false, error: 'Authentication failed.' }
     },
 
-    verifyManagerPin(pin: string): boolean {
-      const match = this.users.find(u => {
-        if (u.pin !== pin.trim()) return false
-        if (isRootSuperDeveloper(u)) return true
-        const rights = getDefaultRightsForUser(u)
-        return (
-          rights.includes('*') ||
-          rights.includes('user_management_screen') ||
-          rights.includes('reports_analytics_screen') ||
-          rights.includes('manage_users') ||
-          rights.includes('assign_rights')
-        )
-      })
-      return !!match
+    async verifyManagerPin(pin: string): Promise<boolean> {
+      const cleanPin = pin.trim()
+      if (!cleanPin) return false
+
+      for (const u of this.users) {
+        if (await comparePin(cleanPin, u.pin)) {
+          if (isRootSuperDeveloper(u)) return true
+          const rights = getDefaultRightsForUser(u)
+          if (
+            rights.includes('*') ||
+            rights.includes('user_management_screen') ||
+            rights.includes('reports_analytics_screen') ||
+            rights.includes('manage_users') ||
+            rights.includes('assign_rights')
+          ) {
+            return true
+          }
+        }
+      }
+      return false
     },
 
     async addUser(user: Omit<UserAccount, 'user_id' | 'created_at'>): Promise<UserAccount> {
@@ -226,12 +254,15 @@ export const useAuthStore = defineStore('auth', {
       const isRoot = cleanUsername.toLowerCase() === 'dev' || user.role === 'DEVELOPER'
       const designation = user.designation?.trim() || (isRoot ? 'Developer / Super Admin' : 'Staff Member')
       const rights = isRoot ? ['*'] : (user.rights && user.rights.length > 0 ? user.rights : getDefaultRightsForUser(user))
+      
+      // Ensure PIN is hashed before DB persistence
+      const securePin = user.pin ? await hashPin(user.pin) : ''
 
       const existing = this.users.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase())
       if (existing) {
         return await this.updateUser(existing.user_id, {
           name: user.name,
-          pin: user.pin,
+          pin: securePin || existing.pin,
           role: isRoot ? 'DEVELOPER' : (user.role || 'SALESPERSON'),
           designation,
           rights,
@@ -243,6 +274,7 @@ export const useAuthStore = defineStore('auth', {
       const newUser: UserAccount = {
         ...user,
         username: cleanUsername,
+        pin: securePin,
         role: isRoot ? 'DEVELOPER' : (user.role || 'SALESPERSON'),
         designation,
         rights,
@@ -282,16 +314,27 @@ export const useAuthStore = defineStore('auth', {
         finalUpdates.role = 'DEVELOPER'
       }
 
+      // Hash new PIN if provided; otherwise omit to preserve existing hashed PIN
+      if (finalUpdates.pin && finalUpdates.pin.trim().length > 0) {
+        finalUpdates.pin = await hashPin(finalUpdates.pin)
+      } else {
+        delete finalUpdates.pin
+      }
+
       try {
-        await db.update(schema.users).set({
+        const updatePayload: any = {
           name: finalUpdates.name,
-          pin: finalUpdates.pin,
           role: finalUpdates.role,
           designation: finalUpdates.designation,
           rights: finalUpdates.rights,
           reports_to_user_id: finalUpdates.reports_to_user_id,
           node_id: finalUpdates.node_id
-        } as any).where(eq(schema.users.user_id, user_id))
+        }
+        if (finalUpdates.pin) {
+          updatePayload.pin = finalUpdates.pin
+        }
+
+        await db.update(schema.users).set(updatePayload).where(eq(schema.users.user_id, user_id))
 
         const idx = this.users.findIndex(u => u.user_id === user_id)
         if (idx !== -1) {

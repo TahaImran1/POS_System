@@ -347,8 +347,13 @@ export interface BatchAdjustmentLine {
   cost_price?: number // buying price for this restock batch
   new_price?: number // optional readjusted unit selling price
   uom_name?: string
+  uom_multiplier?: number
+  purchase_qty?: number
+  unit_cost?: number
+  total_cost?: number
   reference_note?: string
   movement_type?: 'RESTOCK' | 'STOCK_REDUCTION' | 'WASTAGE' | 'AUDIT_CORRECTION' | 'PRICE_ADJUSTMENT' | string
+  vendor_id?: string
 }
 
 export interface PriceHistoryLogItem {
@@ -405,8 +410,9 @@ export async function processBatchInventoryAdjustment(
         }
 
         // Record vendor-specific agreed purchase price
-        if (vendorId) {
-          await recordVendorProductPrice(vendorId, targetPId, item.uom_name || 'PCS', cost)
+        const targetVendorId = item.vendor_id || vendorId
+        if (targetVendorId) {
+          await recordVendorProductPrice(targetVendorId, targetPId, item.uom_name || 'PCS', cost)
         }
       }
 
@@ -473,6 +479,52 @@ export async function processBatchInventoryAdjustment(
         user_name: userName,
         created_at: nowMs
       })
+
+      // 4. Update vendor balance if vendor is assigned
+      const lineVendorId = item.vendor_id || vendorId
+      if (lineVendorId && item.cost_price && item.cost_price > 0 && qtyDelta !== 0) {
+        try {
+          const vRecord = await db.select().from(schema.vendors).where(eq(schema.vendors.vendor_id, lineVendorId)).get()
+          if (vRecord) {
+            const costImpact = Math.abs(qtyDelta) * Number(item.cost_price)
+            const balanceDelta = qtyDelta > 0 ? costImpact : -costImpact
+            await db.update(schema.vendors)
+              .set({ balance: Number(vRecord.balance || 0) + balanceDelta })
+              .where(eq(schema.vendors.vendor_id, lineVendorId))
+          }
+        } catch (vErr) {
+          console.warn('Could not update vendor balance:', vErr)
+        }
+      }
+
+      // 5. Insert structured vendor purchase log if restocking from vendor
+      if (lineVendorId && qtyDelta > 0) {
+        try {
+          const mult = Number(item.uom_multiplier) || 1
+          const purchasedQty = item.purchase_qty !== undefined ? Number(item.purchase_qty) : (qtyDelta / mult)
+          const unitBuyingCost = item.unit_cost !== undefined ? Number(item.unit_cost) : (Number(item.cost_price || 0) * mult)
+          const lineTotal = item.total_cost !== undefined ? Number(item.total_cost) : (purchasedQty * unitBuyingCost)
+
+          await db.insert(schema.vendor_purchases).values({
+            purchase_id: uuidv4(),
+            vendor_id: lineVendorId,
+            po_id: batchId,
+            product_id: targetPId,
+            product_name: prod?.name || 'Stock Item',
+            product_barcode: prod?.barcode || '',
+            quantity: purchasedQty,
+            uom_name: item.uom_name || prod?.uom || 'PCS',
+            uom_multiplier: mult,
+            unit_cost: unitBuyingCost,
+            total_cost: lineTotal,
+            reference_note: item.reference_note ? `[PO #${batchId}] ${item.reference_note}` : `[PO #${batchId}] ${batchReason}`,
+            user_name: userName,
+            created_at: nowMs
+          })
+        } catch (vpErr) {
+          console.warn('Could not insert vendor purchase record:', vpErr)
+        }
+      }
     }
 
     // Reload Pinia Store

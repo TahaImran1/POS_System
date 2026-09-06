@@ -107,7 +107,8 @@ export const useProductStore = defineStore('product', {
                 taxGroupId: '',
                 image: r.image || 'https://ui-avatars.com/api/?name=' + (r.name ? encodeURIComponent(r.name) : 'U'),
                 description: r.description || '',
-                taxAmount: taxes.taxAmount
+                taxAmount: taxes.taxAmount,
+                uom: r.uom || 'PCS'
               }
             } catch (err) {
               console.error(`Error loading details for product ${r.name || 'Unknown'}:`, err)
@@ -124,7 +125,8 @@ export const useProductStore = defineStore('product', {
                 taxGroupId: '',
                 image: r.image || 'https://ui-avatars.com/api/?name=P',
                 description: '',
-                taxAmount: 0
+                taxAmount: 0,
+                uom: r.uom || 'PCS'
               }
             }
           }))

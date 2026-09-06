@@ -133,18 +133,27 @@ onUnmounted(() => {
         <!-- Left: Methods -->
         <div class="w-1/2 p-6 border-r border-gray-200 overflow-y-auto bg-gray-50">
           <h3 class="text-gray-500 font-semibold uppercase tracking-wider text-xs mb-4">Payment Method</h3>
-          <div class="grid grid-cols-2 gap-3 mb-8">
+          <div class="grid grid-cols-3 gap-2.5 mb-8">
             <button 
               @click="paymentMethod = 'Cash'"
-              :class="['p-4 rounded-xl border-2 flex flex-col items-center gap-2 font-bold transition-all', paymentMethod === 'Cash' ? 'border-[#017E84] bg-emerald-50 text-[#017E84]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']"
+              :class="['p-3 rounded-xl border-2 flex flex-col items-center gap-1.5 font-bold transition-all text-xs', paymentMethod === 'Cash' ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-1 ring-emerald-400' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']"
             >
-              <i class="fas fa-money-bill-wave text-2xl"></i> Cash
+              <i class="fas fa-money-bill-wave text-xl text-emerald-600"></i>
+              <span>Cash</span>
+            </button>
+            <button 
+              @click="paymentMethod = 'Credit'"
+              :class="['p-3 rounded-xl border-2 flex flex-col items-center gap-1.5 font-bold transition-all text-xs', paymentMethod === 'Credit' ? 'border-[#714B67] bg-purple-50 text-[#714B67] ring-1 ring-purple-300' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']"
+            >
+              <i class="fas fa-user-tag text-xl text-[#714B67]"></i>
+              <span>Credit</span>
             </button>
             <button 
               @click="paymentMethod = 'Card'"
-              :class="['p-4 rounded-xl border-2 flex flex-col items-center gap-2 font-bold transition-all', paymentMethod === 'Card' ? 'border-[#017E84] bg-indigo-50 text-[#017E84]' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']"
+              :class="['p-3 rounded-xl border-2 flex flex-col items-center gap-1.5 font-bold transition-all text-xs', paymentMethod === 'Card' ? 'border-blue-600 bg-blue-50 text-blue-800 ring-1 ring-blue-400' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300']"
             >
-              <i class="fas fa-credit-card text-2xl"></i> Bank / Card
+              <i class="fas fa-credit-card text-xl text-blue-600"></i>
+              <span>Bank / Card</span>
             </button>
           </div>
 

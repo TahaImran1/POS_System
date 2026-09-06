@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS \`cash_sessions\` (
 	\`expected_closing_balance\` real DEFAULT 0,
 	\`closing_cash_counted\` real,
 	\`cash_variance\` real,
+	\`closing_notes_breakdown\` text,
+	\`closing_note\` text,
 	\`status\` text DEFAULT 'OPEN' NOT NULL,
 	\`opened_at\` integer,
 	\`closed_at\` integer,
@@ -298,6 +300,25 @@ CREATE TABLE IF NOT EXISTS \`vendor_product_prices\` (
 	\`uom_name\` text DEFAULT 'PCS' NOT NULL,
 	\`last_buying_price\` real DEFAULT 0 NOT NULL,
 	\`updated_at\` integer,
+	FOREIGN KEY (\`vendor_id\`) REFERENCES \`vendors\`(\`vendor_id\`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action
+);
+
+CREATE TABLE IF NOT EXISTS \`vendor_purchases\` (
+	\`purchase_id\` text PRIMARY KEY NOT NULL,
+	\`vendor_id\` text NOT NULL,
+	\`po_id\` text NOT NULL,
+	\`product_id\` text NOT NULL,
+	\`product_name\` text NOT NULL,
+	\`product_barcode\` text,
+	\`quantity\` real NOT NULL,
+	\`uom_name\` text DEFAULT 'PCS' NOT NULL,
+	\`uom_multiplier\` real DEFAULT 1 NOT NULL,
+	\`unit_cost\` real DEFAULT 0 NOT NULL,
+	\`total_cost\` real DEFAULT 0 NOT NULL,
+	\`reference_note\` text,
+	\`user_name\` text,
+	\`created_at\` integer NOT NULL,
 	FOREIGN KEY (\`vendor_id\`) REFERENCES \`vendors\`(\`vendor_id\`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (\`product_id\`) REFERENCES \`products\`(\`product_id\`) ON UPDATE no action ON DELETE no action
 );

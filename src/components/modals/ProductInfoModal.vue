@@ -55,6 +55,13 @@ const handleAddToCart = () => {
             <span class="font-mono text-gray-700">{{ product.barcode || 'N/A' }}</span>
           </div>
 
+          <div class="flex justify-between border-b border-gray-100 pb-2">
+            <span class="text-gray-500 font-medium">Unit of Measure (UOM)</span>
+            <span class="font-bold text-[#714B67] bg-purple-50 px-2 py-0.5 rounded border border-purple-100 uppercase text-xs">
+              {{ product.uom || 'PCS' }}
+            </span>
+          </div>
+
           <div class="flex justify-between pt-1">
             <span class="text-gray-500 font-medium">Est. Tax (10%)</span>
             <span class="font-mono text-gray-700">Rs{{ product.taxAmount.toFixed(2) }}</span>

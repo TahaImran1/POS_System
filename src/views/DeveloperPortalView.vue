@@ -7,6 +7,8 @@ import { useUpdateStore } from '../stores/useUpdateStore'
 import { exportDatabase, saveDbToCustomFolder } from '../db/client'
 import { useToast } from '../composables/useToast'
 
+const emit = defineEmits(['open-pos', 'open-manager'])
+
 const masterDbStore = useMasterDbStore()
 const authStore = useAuthStore()
 const nodeConfigStore = useNodeConfigStore()
@@ -140,7 +142,7 @@ const handleEditUser = (user: UserAccount) => {
   editingUser.value = {
     name: user.name,
     username: user.username,
-    pin: user.pin,
+    pin: '', // Blank indicates keeping existing hashed PIN
     designation: user.designation || (isRootSuperDeveloper(user) ? 'Developer / Super Admin' : 'Staff Member'),
     rights: isRootSuperDeveloper(user) ? ['*'] : [...(user.rights || [])],
     reports_to_user_id: user.reports_to_user_id || null,
@@ -150,8 +152,12 @@ const handleEditUser = (user: UserAccount) => {
 }
 
 const handleSaveUser = async () => {
-  if (!editingUser.value.name || !editingUser.value.username || !editingUser.value.pin) {
-    toast.warning('Please complete all required fields.')
+  if (!editingUser.value.name || !editingUser.value.username) {
+    toast.warning('Please enter Name and Username.')
+    return
+  }
+  if (!editingUserId.value && !editingUser.value.pin) {
+    toast.warning('Please enter a PIN code for the new account.')
     return
   }
 
@@ -160,7 +166,7 @@ const handleSaveUser = async () => {
       await authStore.updateUser(editingUserId.value, {
         name: editingUser.value.name,
         username: editingUser.value.username,
-        pin: editingUser.value.pin,
+        pin: editingUser.value.pin.trim() || undefined,
         designation: editingUser.value.designation || 'Staff Member',
         rights: isEditingRootUser.value ? ['*'] : editingUser.value.rights,
         reports_to_user_id: editingUser.value.reports_to_user_id || null,
@@ -171,7 +177,7 @@ const handleSaveUser = async () => {
       await authStore.addUser({
         name: editingUser.value.name,
         username: editingUser.value.username,
-        pin: editingUser.value.pin,
+        pin: editingUser.value.pin.trim(),
         designation: editingUser.value.designation || 'Staff Member',
         rights: editingUser.value.rights,
         reports_to_user_id: editingUser.value.reports_to_user_id || null,
@@ -267,8 +273,26 @@ async function handlePurgeDatabase() {
 
       <div class="flex items-center space-x-3">
         <button 
+          @click="emit('open-pos')" 
+          class="bg-amber-400 hover:bg-amber-500 text-gray-900 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
+          title="Open Live Sales Register & Floor Plan"
+        >
+          <i class="fas fa-cash-register"></i>
+          <span>Open POS Register</span>
+        </button>
+
+        <button 
+          @click="emit('open-manager')" 
+          class="bg-purple-900/50 hover:bg-purple-900 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer border border-purple-300/30"
+          title="Open Store Manager Portal (Inventory, Taxes, Reports & Catalog)"
+        >
+          <i class="fas fa-briefcase text-amber-300"></i>
+          <span>Open Manager Portal</span>
+        </button>
+
+        <button 
           @click="exportDatabase" 
-          class="bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center space-x-1.5 transition-all shadow-xs"
+          class="bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center space-x-1.5 transition-all shadow-xs cursor-pointer"
         >
           <i class="fas fa-download text-amber-300"></i>
           <span>Export .sqlite File</span>
@@ -606,7 +630,7 @@ async function handlePurgeDatabase() {
                   </template>
                 </div>
               </td>
-              <td class="p-3 font-mono font-bold tracking-widest">{{ user.pin }}</td>
+              <td class="p-3 font-mono font-bold text-gray-500 text-xs tracking-widest">•••••• (Secured)</td>
               <td class="p-3 text-right space-x-2">
                 <button 
                   @click="handleEditUser(user)" 
@@ -701,8 +725,16 @@ async function handlePurgeDatabase() {
           </div>
 
           <div>
-            <label class="block font-bold text-gray-700 mb-1">4-6 Digit PIN Code *</label>
-            <input v-model="editingUser.pin" type="text" maxlength="6" class="w-full p-2 border border-gray-300 rounded-lg font-mono tracking-widest text-[#714B67] outline-none focus:ring-2 focus:ring-[#714B67]" />
+            <label class="block font-bold text-gray-700 mb-1">
+              4-6 Digit PIN Code {{ editingUserId ? '(Leave blank to keep current PIN)' : '*' }}
+            </label>
+            <input 
+              v-model="editingUser.pin" 
+              type="password" 
+              maxlength="8" 
+              :placeholder="editingUserId ? '•••••• (Unchanged)' : 'Enter 4-6 digit numeric PIN'" 
+              class="w-full p-2 border border-gray-300 rounded-lg font-mono tracking-widest text-[#714B67] outline-none focus:ring-2 focus:ring-[#714B67]" 
+            />
           </div>
 
           <div class="border-t border-gray-200 pt-3 space-y-2">

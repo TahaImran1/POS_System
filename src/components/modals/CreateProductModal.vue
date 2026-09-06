@@ -11,7 +11,16 @@ import { eq } from 'drizzle-orm'
 import { useSettingsStore } from '../../stores/useSettingsStore'
 import { useToast } from '../../composables/useToast'
 
-import { getProductUOMs, saveProductUOMs, type ProductUOM } from '../../services/uomService'
+import { 
+  getProductUOMs, 
+  saveProductUOMs, 
+  RETAIL_UOM_PRESETS,
+  UOM_CATEGORIES,
+  getUomsByCategory,
+  getUomSymbol,
+  type ProductUOM,
+  type StandardUOM 
+} from '../../services/uomService'
 
 const props = defineProps<{
   show: boolean
@@ -38,7 +47,7 @@ const imageUrl = ref('')
 const isSaving = ref(false)
 const availableTaxGroups = ref<TaxGroup[]>([])
 
-// Nested UOM Hierarchy State
+// Base UOM and Nested UOM Hierarchy State
 export interface UomTierItem {
   uom_id?: string
   uom_name: string
@@ -49,10 +58,69 @@ export interface UomTierItem {
   is_base_uom: boolean
 }
 
-const baseUomName = ref('PCS')
+const selectedBaseUom = ref('PCS')
+const customBaseUom = ref('')
+
+const effectiveBaseUom = computed(() => {
+  if (selectedBaseUom.value === 'CUSTOM') {
+    return customBaseUom.value.trim() || 'Unit'
+  }
+  const preset = RETAIL_UOM_PRESETS.find(u => u.code === selectedBaseUom.value)
+  return preset ? preset.code : selectedBaseUom.value
+})
+
+const effectiveBaseUomName = computed(() => {
+  if (selectedBaseUom.value === 'CUSTOM') {
+    return customBaseUom.value.trim() || 'Unit'
+  }
+  const preset = RETAIL_UOM_PRESETS.find(u => u.code === selectedBaseUom.value)
+  return preset ? preset.name : selectedBaseUom.value
+})
+
+const baseUomSymbol = computed(() => {
+  return getUomSymbol(effectiveBaseUom.value)
+})
+
+function resolvePresetFromUom(val: string): { isCustom: boolean; code: string; customValue: string } {
+  if (!val) return { isCustom: false, code: 'PCS', customValue: '' }
+  const found = RETAIL_UOM_PRESETS.find(
+    u => u.code.toUpperCase() === val.toUpperCase() || 
+         u.name.toUpperCase() === val.toUpperCase() || 
+         u.symbol.toUpperCase() === val.toUpperCase()
+  )
+  if (found) {
+    return { isCustom: false, code: found.code, customValue: '' }
+  }
+  return { isCustom: true, code: 'CUSTOM', customValue: val }
+}
+
 const uomTiers = ref<UomTierItem[]>([
   { uom_name: 'Piece', multiplier_to_base: 1, cost_price: 0, selling_price: 0, barcode: '', is_base_uom: true }
 ])
+
+function syncBaseUomTier() {
+  const baseTier = uomTiers.value.find(u => u.is_base_uom)
+  if (baseTier) {
+    baseTier.uom_name = effectiveBaseUomName.value
+  } else {
+    uomTiers.value.unshift({
+      uom_name: effectiveBaseUomName.value,
+      multiplier_to_base: 1,
+      cost_price: 0,
+      selling_price: 0,
+      barcode: '',
+      is_base_uom: true
+    })
+  }
+}
+
+function handleBaseUomChange() {
+  syncBaseUomTier()
+}
+
+watch([selectedBaseUom, customBaseUom], () => {
+  syncBaseUomTier()
+})
 
 function addUomTier() {
   uomTiers.value.push({
@@ -143,8 +211,15 @@ watch(() => props.editProduct, async (prod) => {
     imageUrl.value = prod.image || ''
     posCategory.value = prod.category || 'general'
     customCategory.value = ''
+
+    // Pre-select configured Base UOM
+    const resolvedUom = resolvePresetFromUom(prod.uom || 'PCS')
+    selectedBaseUom.value = resolvedUom.code
+    customBaseUom.value = resolvedUom.customValue
+
     await loadTaxes()
     await loadProductUoms(prod.id)
+    syncBaseUomTier()
   }
 }, { immediate: true })
 
@@ -174,6 +249,11 @@ const resetForm = () => {
   posCategory.value = 'general'
   customCategory.value = ''
   imageUrl.value = ''
+  selectedBaseUom.value = 'PCS'
+  customBaseUom.value = ''
+  uomTiers.value = [
+    { uom_name: 'Piece', multiplier_to_base: 1, cost_price: 0, selling_price: 0, barcode: '', is_base_uom: true }
+  ]
 }
 
 const handleSaveClick = () => {
@@ -220,7 +300,7 @@ const executeCreateProduct = async () => {
         name: productName.value.trim(),
         product_type: finalType,
         default_price: finalPrice,
-        uom: 'PCS',
+        uom: effectiveBaseUom.value,
         barcode: finalBarcode,
         image: defaultImage,
         description: productName.value.trim(),
@@ -245,7 +325,7 @@ const executeCreateProduct = async () => {
         movement_type: 'INITIAL_SEED',
         quantity_change: initQty,
         quantity_after: initQty,
-        reference_note: `Product Created as ${finalType} with ${salesTaxRate.value}% Tax & ${initQty} Pcs Stock`,
+        reference_note: `Product Created as ${finalType} with ${salesTaxRate.value}% Tax & ${initQty} ${effectiveBaseUom.value} Stock`,
         user_name: authStore.currentUser?.name || 'Store Manager',
         created_at: Date.now()
       })
@@ -280,7 +360,8 @@ const executeCreateProduct = async () => {
       taxGroupId: selectedTaxGroupId.value || '',
       image: defaultImage,
       description: productName.value.trim(),
-      taxAmount: taxAmt
+      taxAmount: taxAmt,
+      uom: effectiveBaseUom.value
     }
 
     // Ensure category exists in store
@@ -319,7 +400,8 @@ const executeUpdateProduct = async () => {
         barcode: finalBarcode,
         image: finalImage,
         description: productName.value.trim(),
-        category: catName
+        category: catName,
+        uom: effectiveBaseUom.value
       })
       .where(eq(schema.products.product_id, props.editProduct.id))
 
@@ -353,7 +435,8 @@ const executeUpdateProduct = async () => {
         image: finalImage,
         category: catName,
         taxGroupId: selectedTaxGroupId.value,
-        taxAmount: existingPrice * (salesTaxRate.value / 100)
+        taxAmount: existingPrice * (salesTaxRate.value / 100),
+        uom: effectiveBaseUom.value
       }
     }
 
@@ -419,6 +502,57 @@ const executeUpdateProduct = async () => {
             </p>
           </div>
 
+          <!-- Base Unit of Measurement (UOM) -->
+          <div class="bg-purple-50/50 border border-purple-200/80 rounded-xl p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block font-bold text-gray-900 text-xs">
+                <i class="fas fa-balance-scale text-[#714B67] mr-1"></i> Base Unit of Measurement (UOM)
+              </label>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-md bg-[#714B67] text-white shadow-2xs">
+                Base Unit: {{ baseUomSymbol }}
+              </span>
+            </div>
+            <p class="text-[11px] text-gray-500">
+              Select the primary retail unit (e.g. Liter, Kilogram, Piece, Meter) used for inventory stock tracking and base pricing.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <div>
+                <label class="block text-[10px] font-bold text-gray-600 mb-0.5">Standard Retail UOM</label>
+                <select 
+                  v-model="selectedBaseUom" 
+                  @change="handleBaseUomChange"
+                  class="w-full border border-gray-300 rounded-lg px-2.5 py-2 text-xs font-bold text-gray-900 focus:outline-none focus:border-[#714B67] bg-white cursor-pointer"
+                >
+                  <optgroup v-for="cat in UOM_CATEGORIES" :key="cat" :label="cat">
+                    <option v-for="u in getUomsByCategory(cat)" :key="u.code" :value="u.code">
+                      {{ u.name }} ({{ u.symbol }})
+                    </option>
+                  </optgroup>
+                  <optgroup label="Custom / Specialized">
+                    <option value="CUSTOM">Custom Unit (Specify...)</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <div v-if="selectedBaseUom === 'CUSTOM'">
+                <label class="block text-[10px] font-bold text-purple-900 mb-0.5">Custom Unit Name</label>
+                <input 
+                  v-model="customBaseUom" 
+                  type="text" 
+                  placeholder="e.g. Plate, Scoop, Tub, Cup" 
+                  class="w-full border border-purple-400 rounded-lg px-2.5 py-2 text-xs font-bold text-purple-950 focus:outline-none focus:border-[#714B67] bg-white"
+                />
+              </div>
+              <div v-else class="flex flex-col justify-end">
+                <div class="text-[11px] text-gray-600 bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between">
+                  <span>Unit Name: <strong class="text-gray-900">{{ effectiveBaseUomName }}</strong></span>
+                  <span class="font-mono font-bold text-[#714B67] bg-purple-100/80 px-1.5 py-0.5 rounded">{{ baseUomSymbol }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- Inventory & Price Architecture Notice -->
           <div class="bg-blue-50/80 border border-blue-200 rounded-xl p-3 flex items-start gap-2.5 text-xs text-blue-950">
             <i class="fas fa-info-circle text-blue-600 text-sm mt-0.5 shrink-0"></i>
@@ -472,7 +606,7 @@ const executeUpdateProduct = async () => {
             <div>
               <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Current Inventory Stock</span>
               <div class="font-mono font-bold text-emerald-700 text-sm mt-0.5">
-                {{ editProduct?.stock || 0 }} Pcs
+                {{ editProduct?.stock || 0 }} {{ baseUomSymbol }}
               </div>
             </div>
             <div>
@@ -490,7 +624,9 @@ const executeUpdateProduct = async () => {
                 <h4 class="font-bold text-xs text-purple-950 uppercase tracking-wider">
                   <i class="fas fa-boxes text-[#714B67] mr-1"></i> Nested Units of Measure (UOM) Hierarchy
                 </h4>
-                <p class="text-[11px] text-gray-500">Configure upper packaging tiers (Piece ➔ Pack ➔ Box ➔ Carton) and multipliers relative to Base Unit.</p>
+                <p class="text-[11px] text-gray-500">
+                  Configure upper packaging tiers (e.g. Pack ➔ Box ➔ Carton) and multipliers relative to Base Unit ({{ baseUomSymbol }}).
+                </p>
               </div>
               <button 
                 @click="addUomTier" 
@@ -509,7 +645,13 @@ const executeUpdateProduct = async () => {
               >
                 <div class="col-span-5">
                   <label class="block text-[10px] font-bold text-gray-500 mb-0.5">Tier Name</label>
-                  <input v-model="uom.uom_name" type="text" placeholder="e.g. Box" class="w-full px-2 py-1 border border-gray-300 rounded font-bold text-gray-900" />
+                  <input 
+                    v-model="uom.uom_name" 
+                    type="text" 
+                    :disabled="uom.is_base_uom"
+                    placeholder="e.g. Box" 
+                    class="w-full px-2 py-1 border border-gray-300 rounded font-bold text-gray-900 disabled:bg-purple-50 disabled:text-purple-900 disabled:border-purple-200" 
+                  />
                 </div>
                 <div class="col-span-4">
                   <label class="block text-[10px] font-bold text-gray-500 mb-0.5">Base Multiplier</label>
@@ -520,14 +662,16 @@ const executeUpdateProduct = async () => {
                       min="0.001" 
                       step="any" 
                       :disabled="uom.is_base_uom" 
-                      class="w-full px-2 py-1 border border-gray-300 rounded font-mono font-bold text-purple-900" 
+                      class="w-full px-2 py-1 border border-gray-300 rounded font-mono font-bold text-purple-900 disabled:bg-gray-100" 
                     />
-                    <span class="text-[10px] text-gray-400 font-bold shrink-0">Pcs</span>
+                    <span class="text-[10px] text-purple-800 font-bold shrink-0">{{ baseUomSymbol }}</span>
                   </div>
                 </div>
                 <div class="col-span-3 flex items-center justify-end gap-1 pt-3">
-                  <span v-if="uom.is_base_uom" class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">Base Unit</span>
-                  <button v-else @click="removeUomTier(idx)" type="button" class="text-xs text-rose-600 hover:text-rose-800 font-bold p-1">
+                  <span v-if="uom.is_base_uom" class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-200 text-purple-900">
+                    Base ({{ baseUomSymbol }})
+                  </span>
+                  <button v-else @click="removeUomTier(idx)" type="button" class="text-xs text-rose-600 hover:text-rose-800 font-bold p-1 cursor-pointer">
                     <i class="fas fa-trash-alt"></i> Remove
                   </button>
                 </div>

@@ -69,7 +69,7 @@ async function loadData() {
     }
   } catch (e) {
     console.error('Error loading vendor payment data:', e)
-  } fontally: {
+  } finally {
     isLoadingData.value = false
   }
 }

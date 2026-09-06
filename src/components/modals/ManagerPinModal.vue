@@ -24,13 +24,13 @@ watch(() => props.show, (newVal) => {
   }
 })
 
-const handleVerify = () => {
+const handleVerify = async () => {
   if (!pinInput.value) {
     errorMsg.value = 'Please enter Manager PIN code.'
     return
   }
 
-  const isValid = authStore.verifyManagerPin(pinInput.value)
+  const isValid = await authStore.verifyManagerPin(pinInput.value)
   if (isValid) {
     errorMsg.value = ''
     emit('authorized')

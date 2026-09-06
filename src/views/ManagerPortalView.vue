@@ -507,7 +507,7 @@ const handleEditStaff = (user: UserAccount) => {
   staffForm.value = {
     name: user.name,
     username: user.username,
-    pin: user.pin,
+    pin: '', // Blank indicates keeping existing hashed PIN
     designation: user.designation || 'Staff Member',
     rights: [...getDefaultRightsForUser(user)],
     reports_to_user_id: user.reports_to_user_id || null,
@@ -524,12 +524,17 @@ const handleSaveStaff = async () => {
   const rights = staffForm.value.rights
   const reports_to_user_id = staffForm.value.reports_to_user_id || null
 
-  if (!name || !username || !pin) {
-    toast.warning('Please enter Name, Username, and PIN.')
+  if (!name || !username) {
+    toast.warning('Please enter Name and Username.')
     return
   }
 
-  if (pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin)) {
+  if (!editingStaffId.value && !pin) {
+    toast.warning('Please enter a secret PIN.')
+    return
+  }
+
+  if (pin && (pin.length < 4 || pin.length > 6 || !/^\d+$/.test(pin))) {
     toast.warning('PIN must be a 4 to 6 digit numeric code.')
     return
   }
@@ -539,7 +544,7 @@ const handleSaveStaff = async () => {
       await authStore.updateUser(editingStaffId.value, {
         name,
         username,
-        pin,
+        pin: pin || undefined,
         designation,
         rights,
         reports_to_user_id,
@@ -722,7 +727,7 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
                   <div class="flex items-center gap-2 mt-1">
                     <span class="text-xs font-extrabold text-[#714B67]">{{ formatCurrency(prod.price) }}</span>
                     <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                      Stock: {{ prod.stock }} Pcs
+                      Stock: {{ prod.stock }} {{ prod.uom || 'Pcs' }}
                     </span>
                     <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 capitalize border border-purple-100">
                       {{ prod.category }}
@@ -1126,9 +1131,9 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
                   <td class="p-3 text-gray-600 text-xs">
                     {{ u.node_id ? (masterDbStore.nodes.find(n => n.node_id === u.node_id)?.location_name || 'Main Register') : 'All Terminals' }}
                   </td>
-                  <td class="p-3 font-mono font-bold text-gray-600 text-xs">
-                    <span class="bg-gray-100 px-2 py-1 rounded border border-gray-200">
-                      {{ u.pin ? `${u.pin.slice(0, 1)}•••${u.pin.slice(-1)}` : '••••' }}
+                  <td class="p-3 font-mono font-bold text-gray-500 text-xs">
+                    <span class="bg-gray-100 px-2.5 py-1 rounded border border-gray-200 tracking-widest">
+                      •••••• (Secured)
                     </span>
                   </td>
                   <td class="p-3 text-right">
@@ -1246,7 +1251,9 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
 
           <div>
             <div class="flex justify-between items-center mb-1">
-              <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">Secret Login PIN (4-6 Digits) *</label>
+              <label class="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                Secret Login PIN (4-6 Digits) {{ editingStaffId ? '(Leave blank to keep unchanged)' : '*' }}
+              </label>
               <button 
                 @click="generateRandomStaffPin" 
                 type="button" 
@@ -1257,9 +1264,9 @@ const formatCurrency = (val: number) => `Rs ${val.toFixed(2)}`
             </div>
             <input 
               v-model="staffForm.pin" 
-              type="text" 
+              type="password" 
               maxlength="6"
-              placeholder="e.g. 4829" 
+              :placeholder="editingStaffId ? '•••••• (Unchanged)' : 'e.g. 4829'" 
               class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono font-bold tracking-widest text-[#714B67] focus:outline-none focus:ring-2 focus:ring-[#714B67]"
             />
             <p class="text-[10px] text-gray-400 mt-1">Users will enter this PIN code to switch account on the register.</p>

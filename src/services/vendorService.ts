@@ -287,3 +287,218 @@ export async function recordVendorProductPrice(
     console.warn('Could not record vendor product price:', e)
   }
 }
+
+export interface VendorPaymentRecord {
+  payment_id: string
+  vendor_id: string
+  vendor_name: string
+  po_id: string | null
+  amount: number
+  debit_note_amount: number
+  payment_method: string
+  user_name: string | null
+  notes: string | null
+  created_at: number
+}
+
+// Fetch all vendor payments for the accounts payable ledger
+export async function getVendorPayments(): Promise<VendorPaymentRecord[]> {
+  try {
+    const rawPayments = await db.select().from(schema.vendor_payments).orderBy(desc(schema.vendor_payments.created_at))
+    const vList = await db.select().from(schema.vendors)
+    const vMap = new Map<string, string>(vList.map((v: any) => [v.vendor_id, v.name]))
+
+    return rawPayments.map((p: any) => ({
+      payment_id: p.payment_id,
+      vendor_id: p.vendor_id,
+      vendor_name: vMap.get(p.vendor_id) || 'Unknown Vendor',
+      po_id: p.po_id,
+      amount: Number(p.amount || 0),
+      debit_note_amount: Number(p.debit_note_amount || 0),
+      payment_method: p.payment_method || 'Cash',
+      user_name: p.user_name,
+      notes: p.notes,
+      created_at: Number(p.created_at || Date.now())
+    }))
+  } catch (e) {
+    console.warn('Could not fetch vendor payments:', e)
+    return []
+  }
+}
+
+export interface VendorPurchaseRecord {
+  purchase_id: string
+  vendor_id: string
+  po_id: string
+  product_id: string
+  product_name: string
+  product_barcode: string
+  quantity: number
+  uom_name: string
+  uom_multiplier: number
+  unit_cost: number
+  total_cost: number
+  reference_note: string | null
+  user_name: string | null
+  created_at: number
+}
+
+// Automatic backfill helper: migrate historic restocks from inventory_logs into vendor_purchases
+let hasCheckedBackfill = false
+
+export async function backfillVendorPurchasesFromInventoryLogs(): Promise<void> {
+  if (hasCheckedBackfill) return
+  hasCheckedBackfill = true
+
+  try {
+    const logs = await db.select().from(schema.inventory_logs)
+    const restockLogs = logs.filter((l: any) => 
+      l.movement_type === 'RESTOCK' || 
+      (l.reference_note && (l.reference_note.includes('[PO') || l.reference_note.toLowerCase().includes('restock'))) ||
+      Number(l.quantity_change) > 0
+    )
+
+    if (restockLogs.length === 0) return
+
+    const existingPurchases = await db.select().from(schema.vendor_purchases)
+    const existingIds = new Set(existingPurchases.map((p: any) => p.purchase_id))
+    const existingPoProductKeys = new Set(existingPurchases.map((p: any) => `${p.po_id}_${p.product_id}`))
+
+    const vendors = await db.select().from(schema.vendors)
+    if (vendors.length === 0) return
+
+    const products = await db.select().from(schema.products)
+    const prodMap = new Map<string, any>(products.map((p: any) => [p.product_id, p]))
+
+    let priceAgreements: any[] = []
+    try {
+      priceAgreements = await db.select().from(schema.vendor_product_prices)
+    } catch (_) {}
+
+    for (const log of restockLogs) {
+      if (existingIds.has(log.log_id)) continue
+
+      const refNote: string = log.reference_note || ''
+      const prod = prodMap.get(log.product_id)
+
+      // Extract PO ID: e.g. [PO #PO-123456] or [PO-123456]
+      const poMatch = refNote.match(/\[(?:PO\s*#)?(PO-[A-Za-z0-9_\-]+)\]/i)
+      const poId = poMatch ? poMatch[1] : `PO-${new Date(Number(log.created_at || Date.now())).toISOString().slice(2, 10).replace(/-/g, '')}`
+
+      if (existingPoProductKeys.has(`${poId}_${log.product_id}`)) continue
+
+      // Determine Vendor ID
+      let matchedVendorId: string | null = null
+
+      // 1. Check if price agreements map this product to a vendor
+      const agreed = priceAgreements.find((a: any) => a.product_id === log.product_id)
+      if (agreed) {
+        matchedVendorId = agreed.vendor_id
+      }
+
+      // 2. Check if reference note mentions any vendor name
+      if (!matchedVendorId) {
+        for (const v of vendors) {
+          if (refNote.toLowerCase().includes(v.name.toLowerCase())) {
+            matchedVendorId = v.vendor_id
+            break
+          }
+        }
+      }
+
+      // 3. Check if only one vendor has a positive balance
+      if (!matchedVendorId) {
+        const activeVendors = vendors.filter((v: any) => Number(v.balance || 0) > 0)
+        if (activeVendors.length === 1) {
+          matchedVendorId = activeVendors[0].vendor_id
+        }
+      }
+
+      // 4. Default to first active vendor if none matched
+      if (!matchedVendorId && vendors.length > 0) {
+        matchedVendorId = vendors[0].vendor_id
+      }
+
+      if (!matchedVendorId) continue
+
+      // Parse quantity, UOM, and unit cost from reference note
+      // Format: "PO Restock (10 Box @ Rs 150.00)"
+      const detailsMatch = refNote.match(/\((\d+(?:\.\d+)?)\s+([A-Za-z0-9_\-]+)\s+@\s+Rs\s+(\d+(?:\.\d+)?)\)/i)
+      let quantity = Math.abs(Number(log.quantity_change) || 1)
+      let uomName = prod?.uom || 'PCS'
+      let unitCost = Number(prod?.cost_price) || (prod ? Number(prod.default_price || 0) * 0.8 : 0)
+
+      if (detailsMatch) {
+        quantity = parseFloat(detailsMatch[1])
+        uomName = detailsMatch[2]
+        unitCost = parseFloat(detailsMatch[3])
+      }
+
+      const totalCost = Number((quantity * unitCost).toFixed(2))
+
+      await db.insert(schema.vendor_purchases).values({
+        purchase_id: log.log_id,
+        vendor_id: matchedVendorId,
+        po_id: poId,
+        product_id: log.product_id,
+        product_name: prod ? prod.name : 'Stock Item #' + log.product_id.substr(0, 6),
+        product_barcode: prod?.barcode || '',
+        quantity: quantity,
+        uom_name: uomName,
+        uom_multiplier: 1,
+        unit_cost: unitCost,
+        total_cost: totalCost,
+        reference_note: refNote || `[PO #${poId}] Historic inventory restock`,
+        user_name: log.user_name || 'Store Manager',
+        created_at: Number(log.created_at || Date.now())
+      }).catch((err: any) => {
+        console.warn('Backfill insert skipped:', err)
+      })
+
+      existingIds.add(log.log_id)
+      existingPoProductKeys.add(`${poId}_${log.product_id}`)
+    }
+  } catch (e) {
+    console.warn('Error during vendor purchase backfill:', e)
+  }
+}
+
+// Fetch all vendor purchases / restock logs for accounts payable detail
+export async function getVendorPurchases(vendorId?: string): Promise<VendorPurchaseRecord[]> {
+  try {
+    // Run safe backfill once so historic restocks in inventory_logs appear as vendor purchases
+    await backfillVendorPurchasesFromInventoryLogs()
+
+    let rows: any[] = []
+    if (vendorId) {
+      rows = await db.select().from(schema.vendor_purchases)
+        .where(eq(schema.vendor_purchases.vendor_id, vendorId))
+        .orderBy(desc(schema.vendor_purchases.created_at))
+    } else {
+      rows = await db.select().from(schema.vendor_purchases)
+        .orderBy(desc(schema.vendor_purchases.created_at))
+    }
+
+    return rows.map((r: any) => ({
+      purchase_id: r.purchase_id,
+      vendor_id: r.vendor_id,
+      po_id: r.po_id,
+      product_id: r.product_id,
+      product_name: r.product_name,
+      product_barcode: r.product_barcode || '',
+      quantity: Number(r.quantity || 0),
+      uom_name: r.uom_name || 'PCS',
+      uom_multiplier: Number(r.uom_multiplier || 1),
+      unit_cost: Number(r.unit_cost || 0),
+      total_cost: Number(r.total_cost || 0),
+      reference_note: r.reference_note || '',
+      user_name: r.user_name || 'Store Manager',
+      created_at: Number(r.created_at || Date.now())
+    }))
+  } catch (e) {
+    console.warn('Could not fetch vendor purchases:', e)
+    return []
+  }
+}
+
+

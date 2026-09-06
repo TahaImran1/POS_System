@@ -268,6 +268,8 @@ export async function initDb() {
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN expected_closing_balance REAL DEFAULT 0;")
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN closing_cash_counted REAL;")
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN cash_variance REAL;")
+    safeAlter("ALTER TABLE cash_sessions ADD COLUMN closing_notes_breakdown TEXT;")
+    safeAlter("ALTER TABLE cash_sessions ADD COLUMN closing_note TEXT;")
     safeAlter("ALTER TABLE cash_sessions ADD COLUMN closed_at INTEGER;")
     
     // Migrations for users table designation, rights permissions & reports_to hierarchy
@@ -285,6 +287,24 @@ export async function initDb() {
         uom_name text DEFAULT 'PCS' NOT NULL,
         last_buying_price real DEFAULT 0 NOT NULL,
         updated_at integer
+      );
+    `)
+    safeAlter(`
+      CREATE TABLE IF NOT EXISTS vendor_purchases (
+        purchase_id text PRIMARY KEY NOT NULL,
+        vendor_id text NOT NULL,
+        po_id text NOT NULL,
+        product_id text NOT NULL,
+        product_name text NOT NULL,
+        product_barcode text,
+        quantity real NOT NULL,
+        uom_name text DEFAULT 'PCS' NOT NULL,
+        uom_multiplier real DEFAULT 1 NOT NULL,
+        unit_cost real DEFAULT 0 NOT NULL,
+        total_cost real DEFAULT 0 NOT NULL,
+        reference_note text,
+        user_name text,
+        created_at integer NOT NULL
       );
     `)
 

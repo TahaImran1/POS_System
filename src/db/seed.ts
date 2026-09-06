@@ -3,6 +3,8 @@ import { db } from './client'
 import * as schema from './schema'
 import { eq } from 'drizzle-orm'
 
+import { hashPin } from '../utils/crypto'
+
 export async function runInitialSeed() {
   const existingNodes = await db.select().from(schema.nodes).limit(1)
   if (existingNodes.length === 0) {
@@ -34,13 +36,14 @@ export async function runInitialSeed() {
   if (existingUsers.length === 0) {
     const posNode = (await db.select().from(schema.nodes).limit(1))[0]
     const defaultNodeId = posNode?.node_id || uuidv4()
+    const hashedDevPin = await hashPin('1234')
 
     await db.insert(schema.users).values([
       {
         user_id: uuidv4(),
         username: 'dev',
         name: 'Super Developer',
-        pin: '1234',
+        pin: hashedDevPin,
         role: 'DEVELOPER',
         designation: 'Developer / Super Admin',
         rights: ['*'],
@@ -48,7 +51,7 @@ export async function runInitialSeed() {
         created_at: Date.now()
       }
     ])
-    console.log('Seeded default developer account.')
+    console.log('Seeded default developer account with hashed PIN.')
   }
 
   // Seed App Settings if none exist
